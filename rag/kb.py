@@ -96,5 +96,5 @@ def rag_answer(query, context_chunks):
     context = "\n\n".join(f"[source: {c['source']}]\n{c['text']}"
                           for c in context_chunks)
     prompt = f"Context:\n{context}\n\nQuestion: {query}\n\nAnswer:"
-    # prefer="strong" -> Groq 70B if GROQ_API_KEY is set, else Ollama 3b
+    # prefer="strong" -> Groq openai/gpt-oss-120b if GROQ_API_KEY is set, else Ollama llama3.2:3b
     return llm.complete(prompt, system=RAG_SYSTEM, prefer="strong", max_tokens=250)

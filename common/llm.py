@@ -71,7 +71,7 @@ def _ollama(messages, temperature, max_tokens):
         raise RuntimeError(
             f"Could not reach Ollama at {OLLAMA_URL} ({e}). "
             "Start it with `bash scripts/startup_ollama.sh` (or `ollama serve &`).")
-    return resp["message"]["content"].strip()
+    return (resp["message"].get("content") or "").strip()
 
 
 def _groq(messages, prefer, temperature, max_tokens):
@@ -90,7 +90,10 @@ def _groq(messages, prefer, temperature, max_tokens):
             body = ""
         raise RuntimeError(f"Groq request failed ({e.code}) for model {model}. "
                            f"Response: {body or '(no body)'}")
-    return resp["choices"][0]["message"]["content"].strip()
+    # gpt-oss are reasoning models: they spend completion tokens on a
+    # "reasoning" field before emitting "content". If max_tokens is used up by
+    # reasoning, content comes back empty or null -- never assume a string.
+    return (resp["choices"][0]["message"].get("content") or "").strip()
 
 
 def guard_available():
@@ -144,7 +147,7 @@ def moderate(messages):
         return None, f"safety classifier request failed ({e.code})"
     except (urllib.error.URLError, ConnectionError) as e:
         return None, f"safety classifier unreachable ({e})"
-    text = resp["choices"][0]["message"]["content"].strip()
+    text = (resp["choices"][0]["message"].get("content") or "").strip()
     verdict, category = "safe", "safe"
     try:
         m = re.search(r"\{.*\}", text, re.S)
