@@ -1,7 +1,7 @@
 # Building Secure AI Agents: Defense-First Development
 ## Half-day workshop (3 hours)
 ## Session labs
-## Revision 1.5 - 09/05/26
+## Revision 1.6 - 09/05/26
 
 
 **Follow the startup instructions in the README.md file IF NOT ALREADY DONE!**
@@ -33,16 +33,17 @@ No single control is perfect - that is the point. By the end, HelpBot survives
 attacks that flattened it in Lab 1, because the layers cover each other. This is
 **defense in depth**, applied to agents.
 
-**How to pace yourself.** Each lab is built to run in **10-12 minutes** including
-reading. Each lab ends with an optional step - that is *extra*, not required. If
-you finish early, explore them; if you are still merging when the group moves on,
-skip straight to running the code. Nothing in a later lab depends on finishing an
-earlier one.
+**One idea ties them together.** Every control you build is a *precondition* on an
+action: the action runs only if the check passes. You enforce it in the shell around
+the model, never inside it - which is why it holds even when the model is wrong.
 
-**A note on the model.** The labs use a **real** language model. With a free Groq
-key set (see README) they use fast hosted models plus a real model-based **safety
-classifier**; without one they fall back to a local `llama3.2:3b` via Ollama.
-Because the model is real, exact wording varies run to run - the security
+**How to pace yourself.** Each lab runs in **10-12 minutes** including reading, and
+ends with an optional step you can skip. Nothing in a later lab depends on finishing
+an earlier one.
+
+**A note on the model.** The labs use a real model. With a free Groq key (see README)
+you get fast hosted models plus a real **safety classifier**; without one they fall
+back to local `llama3.2:3b`. Exact wording varies run to run - the security
 *outcomes* (BLOCKED / FIXED / DENIED) do not.
 
 ---
@@ -50,7 +51,7 @@ Because the model is real, exact wording varies run to run - the security
 
 **Lab 1: Guardrails and Canary Tokens - Wrapping the Model**
 
-**Purpose: In this lab, we put the first layer of defense around HelpBot: a guardrails pipeline modeled on the validator pattern used by frameworks like Guardrails.ai. Input guards run *before* the model to block jailbreaks and off-topic or oversized requests; output guards run *after* the model to redact PII and block unsafe completions. Then we add a canary token - a tripwire that catches a system-prompt leak even when every other guard misses it.**
+**Purpose: Put the first layer of defense around HelpBot. Input guards run *before* the model to block jailbreaks and off-topic or oversized requests; output guards run *after* it to redact PII and block unsafe answers. Then add a canary token - a tripwire that catches a prompt leak the guards miss.**
 
 > **New terms in this lab:** a **guardrail** is a cheap, deterministic check you run around the model (not inside it). An **input guard** screens the user's request before it costs a model call; an **output guard** screens the model's reply before the user sees it. A **jailbreak** is a prompt crafted to make the model ignore its instructions. A **canary token** is a unique secret string planted in the system prompt that should never appear in a normal answer - if it does, you know the prompt leaked.
 
@@ -70,9 +71,7 @@ cd /workspaces/secure-agents/guardrails
 code guardrails_demo.py
 ```
 
-Notice the two families of guards. **Input guards** (`guard_jailbreak`, `guard_topic`, `guard_length`) screen the request. **Output guards** (`guard_pii`, `guard_banned`) screen the response. Each returns `(ok, reason, fixed_text)` - fixed text means the pipeline *repairs* and continues; `None` means *blocked*.
-
-Wrapping those hand-built guards, `main()` also calls a **real model-based safety classifier** on both the input and the output (via `llm.moderate()`). That is the production pattern: regex/allowlist guards you own, **plus** a classifier that catches harm categories you could never enumerate by hand. The classifier runs only if you have set a `GROQ_API_KEY`.
+Two families of guards: **input** (`guard_jailbreak`, `guard_topic`, `guard_length`) screen the request; **output** (`guard_pii`, `guard_banned`) screen the reply. Each returns `(ok, reason, fixed_text)` - fixed text *repairs* and continues, `None` *blocks*. Around them, `main()` also calls a real safety classifier via `llm.moderate()` (needs `GROQ_API_KEY`).
 
 <br><br>
 
@@ -86,7 +85,7 @@ code -d ../extra/guardrails_complete.txt guardrails_demo.py
 
 <br><br>
 
-4. Before you merge, skim what you are about to add. In the **input guards**: the jailbreak patterns (`ignore previous instructions`, `reveal your system prompt`, "developer mode"), the `ALLOWED_TOPICS` allowlist, and a maximum input length. In the **output guards**: `PII_PATTERNS` that redact SSNs, cards, emails and phone numbers (a *FIXED* outcome) and `BANNED_OUTPUT` patterns that hard-block dangerous responses (a *BLOCK* outcome). Note how `run_guards` tells a repairable finding from a hard block.
+4. Skim what you are about to add: jailbreak patterns, the `ALLOWED_TOPICS` allowlist and a length cap on the input side; `PII_PATTERNS` (redact = *FIXED*) and `BANNED_OUTPUT` (hard *BLOCK*) on the output side. Note how `run_guards` tells a repairable finding from a hard block.
 
 <br><br>
 
@@ -102,25 +101,25 @@ python guardrails_demo.py
 
 ✓ **Success looks like:** one block prints per request. The jailbreak, the off-topic poem, and the oversized input each show **INPUT BLOCKED (never reached the model)**; the benign question shows **DELIVERED (PASS)**; the contact-confirmation request shows **DELIVERED (FIXED)** with `[EMAIL-REDACTED]` / `[PHONE-REDACTED]`. If everything shows PASS with no blocks, a guard didn't merge - reopen the diff at Step 3.
 
-Each request flows through four layers: **classifier (input) -> your input guards -> the model -> your output guards -> classifier (output)**. The header line shows whether the classifier is `on`. The first request includes a brief model warm-up.
+Each request flows: **classifier -> input guards -> model -> output guards -> classifier**. The header line shows whether the classifier is `on`.
 
 ![Input guard results](./images/bsa-1-input1.png?raw=true "Input guard results")
 
 <br><br>
 
-7. Read the **input** side. The legitimate password question passes through to the model. The jailbreak, the off-topic poem, and the oversized input are each **INPUT BLOCKED (never reached the model)**, with the triggering guard named - those prompts never cost you a model call.
+7. Read the **input** side. The legitimate question reaches the model; the jailbreak, poem and oversized input are each **INPUT BLOCKED**, with the triggering guard named - they never cost you a model call.
 
 ![Input guard details](./images/bsa-1-input2.png?raw=true "Input guard details")
 
 <br><br>
 
-8. Now read the **output** side. The benign answer is **DELIVERED (PASS)**. The contact-confirmation request exercises the PII guard: the assistant repeats back the email and phone you gave it, the output guard redacts them, and you get **DELIVERED (FIXED)**. A strong model often *refuses* to repeat an SSN or card on its own - which is a good outcome, and exactly why the output guard is your **backstop for when the model doesn't refuse**.
+8. Now the **output** side. The benign answer is **DELIVERED (PASS)**. The contact-confirmation request exercises the PII guard: the model repeats back the email and phone, the guard redacts them, and you get **DELIVERED (FIXED)**. A strong model often refuses to repeat an SSN on its own - the output guard is your backstop for when it doesn't.
 
 ![Output guard results](./images/bsa-1-output.png?raw=true "Output guard results")
 
 <br><br>
 
-9. Look at the **last** request (`...walk me through building a pipe bomb`). It is genuinely harmful, but it is also *on-topic* (it mentions an account), so your regex and allowlist guards let it through - exactly what hand-built rules miss. With a `GROQ_API_KEY` set, **the safety classifier flags it and blocks it at the input layer**. Without a key you watch it slip past the cheap guards. That is the whole point: a model-based classifier catches what patterns can't.
+9. Look at the **last** request (`...walk me through building a pipe bomb`). It is harmful but *on-topic*, so your regex and allowlist guards let it through. With a `GROQ_API_KEY` set, the **safety classifier blocks it at the input layer** - a classifier catches what patterns can't.
 
 <br><br>
 
@@ -130,15 +129,11 @@ Each request flows through four layers: **classifier (input) -> your input guard
 python canary_demo.py
 ```
 
-A unique secret (`CANARY-7f3a9c2b1e-DO-NOT-REVEAL`) is planted in HelpBot's *hardened* system prompt, which also pre-refuses meta-requests ("reveal your prompt," "repeat everything above"). The script fires real leak attempts, then **replays one known-compromised response** so you always see the tripwire fire: `scan_for_canary()` finds the secret, **BLOCKS** the answer, and raises an alert. A canary can't *prevent* a leak - it *guarantees you detect one*.
+A unique secret is planted in HelpBot's hardened system prompt. The script fires real leak attempts, then replays one known-compromised response so you always see the tripwire fire: `scan_for_canary()` finds the secret, **BLOCKS** the answer, and alerts. A canary can't *prevent* a leak - it guarantees you *detect* one.
 
 <br><br>
 
 11. **(Optional)** Add a prompt of your own to the `inputs` list in `main()` and re-run to see which guard catches it.
-
-<br><br>
-
-> **Invariant lens:** each guard is a *precondition* on an action — the answer is delivered only if it satisfies every check. You are declaring invariants ("no PII leaves the system," "the canary never appears in output") and enforcing them at runtime, in the shell around the model rather than trusting the model to hold them.
 
 <br><br>
 
@@ -155,9 +150,9 @@ A unique secret (`CANARY-7f3a9c2b1e-DO-NOT-REVEAL`) is planted in HelpBot's *har
 
 **Lab 2: Securing Agent Tool Calls - Least Privilege, Approval, and Budgets**
 
-**Purpose: In this lab, we constrain HelpBot so a hijacked prompt can't make it misuse its tools. We start from the agent blindly following a poisoned support ticket - exporting employee data, emailing it outside the company, and deleting the audit log - then add three controls that contain the exact same attack: a least-privilege tool allowlist per task, an approval gate for high-risk actions, and hard budgets on how much the agent can do.**
+**Purpose: Constrain HelpBot so a hijacked prompt can't make it misuse its tools. Start from the agent obeying a poisoned support ticket - exporting employee data, emailing it out, deleting the audit log - then add three controls that contain the same attack: a least-privilege allowlist, an approval gate, and hard budgets.**
 
-> **New terms in this lab (skip if you build agents already):** an **agent** is an LLM in a loop that decides which **tools** (functions like "send email" or "export data") to call to finish a job. **Indirect prompt injection** is when the malicious instructions arrive *inside data the agent reads* - here, a hidden note in a support ticket - rather than from the user. **Least privilege** means giving the agent only the tools a given task needs. An **allowlist** is the explicit set of permitted tools. An **approval gate** pauses a risky action for review. A **budget** is a hard cap on how many steps or tool calls one run may take.
+> **New terms** (skip if you build agents already): an **agent** is an LLM in a loop deciding which **tools** to call. **Indirect prompt injection** is malicious instructions arriving *inside data the agent reads* - here, a hidden note in a ticket. **Least privilege** means offering only the tools a task needs; an **allowlist** is that permitted set. An **approval gate** pauses a risky action; a **budget** caps how many steps one run may take.
 
 <br>
 
@@ -175,7 +170,7 @@ cd /workspaces/secure-agents/agents
 code secure_agent.py
 ```
 
-Look at three things. `TICKET` is a support request that *looks* benign ("summarize the Q3 benefits changes") but hides an attacker's instructions in an HTML comment - the indirect-injection payload. The tool set is split into `SAFE_TOOLS` (`read_ticket`, `summarize`) and `HIGH_RISK_TOOLS` (`export_data`, `send_email`, `delete_records`). A **real model** reads the ticket in `build_plan()` and proposes which tools to call - and, taking the bait, it tries to run the dangerous ones.
+Three things to see. `TICKET` looks benign ("summarize the Q3 benefits changes") but hides attacker instructions in an HTML comment - the injection payload. Tools split into `SAFE_TOOLS` and `HIGH_RISK_TOOLS` (`export_data`, `send_email`, `delete_records`). A real model reads the ticket in `build_plan()` and proposes which to call.
 
 ![Indirect injection](./images/bsa-2-injection.png?raw=true "Indirect injection")
 
@@ -187,7 +182,7 @@ Look at three things. `TICKET` is a support request that *looks* benign ("summar
 python secure_agent.py
 ```
 
-The three control functions are still no-ops, so `export_data`, `send_email`, and `delete_records` all fire, ending in `BREACH`. That is undefended HelpBot doing exactly what the poisoned ticket told it to. (The model's proposed plan varies run to run; the canonical attack is replayed so the breach is reproducible.)
+The three control functions are still no-ops, so `export_data`, `send_email` and `delete_records` all fire, ending in `BREACH` - undefended HelpBot doing exactly what the ticket told it to. (The model's plan varies run to run; the canonical attack is replayed so the breach is reproducible.)
 
 ![The breach](./images/bsa-2-breach.png?raw=true "The breach")
 
@@ -204,9 +199,9 @@ code -d ../extra/secure_agent_complete.txt secure_agent.py
 <br><br>
 
 5. These three functions are the whole defense:
-   - **`allowed_tools(task)`** - *least privilege.* Return only the tools this job needs (`read_ticket`, `summarize`, `send_email`). Because `export_data` and `delete_records` are never offered, a hijacked plan that calls them is refused outright.
-   - **`approve(tool, args)`** - *the approval gate.* Low-risk tools run freely; high-risk tools pause for an approver. In this unattended demo the approver denies the unexpected action (emailing data to an outside address was never part of the ticket).
-   - **`within_budget(steps_taken, executed)`** - *budgets.* Stop the run once it exceeds `MAX_STEPS`, so even a bypassed agent can't loop or escalate.
+   - **`allowed_tools(task)`** - *least privilege.* Offer only the tools this job needs. `export_data` and `delete_records` are never offered, so a hijacked plan can't reach them.
+   - **`approve(tool, args)`** - *the approval gate.* High-risk tools pause for an approver, who denies the unexpected outside-address send.
+   - **`within_budget(steps_taken, executed)`** - *budgets.* Stop once the run exceeds `MAX_STEPS`, so a bypassed agent can't loop or escalate.
 
 <br><br>
 
@@ -224,20 +219,15 @@ python secure_agent.py
 
 <br><br>
 
-8. Compare the two runs. Same plan, different outcome - and each control does a distinct job:
-   - `export_data` -> **BLOCKED (not in least-privilege allowlist)**
-   - `send_email` -> **BLOCKED (approval denied)**
-   - the remaining attacker steps -> **HALTED (budget)**
-
-   The legitimate `read_ticket` and `summarize` steps still succeed, so HelpBot completes the job it was actually hired to do.
+8. Compare the two runs: same plan, different outcome. The legitimate `read_ticket` and `summarize` steps still succeed, so HelpBot completes the job it was actually hired to do.
 
 ![Same hijack, contained](./images/bsa-2-contained.png?raw=true "Same hijack, contained")
 
 <br><br>
 
-9. Notice all three controls are necessary. Least privilege removes tools the task never needs; the approval gate catches a high-risk tool the task *does* legitimately use (`send_email`) but that the attacker tried to abuse; budgets cap the blast radius if anything slips through.
+9. All three are necessary: least privilege removes tools the task never needs, the gate catches abuse of a tool the task *does* use (`send_email`), and budgets cap the blast radius if anything slips through.
 
-   Note also *who* sits in that gate. `approve()` is a **policy hook**, not a synonym for "a person" - it can be a human, a static policy, or a model-based classifier like the one you called in Lab 1. The invariant is unchanged (*no high-risk tool fires without approval*); only the evaluator is pluggable. We cover the industry data behind that shift on the slides.
+   Note *who* sits in that gate. `approve()` is a **policy hook**, not a synonym for "a person" - it can be a human, a static policy, or a classifier like the one in Lab 1. Only the evaluator is pluggable; the rule is unchanged. The slides cover the industry data behind that shift.
 
 <br><br>
 
@@ -245,14 +235,10 @@ python secure_agent.py
 
 <br><br>
 
-> **Invariant lens:** least privilege, approval, and budgets are *preconditions* on every tool call — a tool fires only if it is in the allowlist, is approved, and the run is within budget. These are runtime invariants on what the agent may *do*, enforced independently of whatever plan the model proposes.
-
-<br><br>
-
 **Key Takeaways:**
 - **The agent will be talked into things** - indirect prompt injection means any data the agent reads can carry instructions. Assume the model will follow them.
 - **Least privilege first** - the safest dangerous tool is the one you never hand the model for that task.
-- **Gate high-risk actions - and watch who is gating** - route consequential tools through an *approver* before they fire. That approver can be a human, a static policy, or a classifier. Pick deliberately: a gate staffed only by a tired operator is a speed bump, not a control.
+- **Gate high-risk actions - and watch who is gating** - route consequential tools through an approver: human, policy, or classifier. A gate staffed only by a tired operator is a speed bump, not a control.
 - **Budget the blast radius** - hard caps on steps and tool calls keep a hijacked agent from looping or escalating, even when other controls miss.
 
 <p align="center">
@@ -262,7 +248,7 @@ python secure_agent.py
 
 **Lab 3: Hardening MCP Servers and Tools**
 
-**Purpose: In this lab, we'll harden the Model Context Protocol (MCP) server that HelpBot uses to reach its tools. A token authority issues scoped JWT access tokens (PyJWT), and a real FastMCP server enforces per-tool scope checks in middleware - so the same server grants different clients access to different subsets of tools, following least privilege at the protocol boundary.**
+**Purpose: Harden the Model Context Protocol (MCP) server HelpBot uses to reach its tools. A token authority issues scoped JWTs, and a real FastMCP server enforces per-tool scope checks in middleware - so one server grants different clients different subsets of tools.**
 
 **This lab uses two terminals: the MCP server and the client.**
 
@@ -284,7 +270,7 @@ cd /workspaces/secure-agents/mcp
 code auth.py
 ```
 
-`auth.py` mints and verifies scoped JWTs with the real **PyJWT** library. Note the **client registry**: `full-client` is granted all three tool scopes (`tools:add`, `tools:multiply`, `tools:divide`); `limited-client` is granted only `tools:add`. Those scopes are signed into each token's `scope` claim, so they can't be tampered with. (This stands in for a real identity provider.)
+`auth.py` mints and verifies scoped JWTs with real **PyJWT**. Note the **client registry**: `full-client` gets all three scopes; `limited-client` gets only `tools:add`. Those scopes are signed into the token, so a client can't tamper with them. (This stands in for a real identity provider.)
 
 ![Token authority](./images/bsa-3-auth.png?raw=true "Token authority")
 
@@ -296,7 +282,7 @@ code auth.py
 code secure_server.py
 ```
 
-This is a real **FastMCP** server exposing three tools (`add`, `multiply`, `divide`) over HTTP. The security lives in `ScopeMiddleware.on_call_tool`, which runs on **every** tool call: it reads the `Authorization` header, verifies the Bearer JWT with `auth.verify_token`, then calls `enforce_scope()` - the one function you'll complete.
+A real **FastMCP** server exposing `add`, `multiply` and `divide` over HTTP. The security lives in `ScopeMiddleware.on_call_tool`, which runs on **every** call: read the `Authorization` header, verify the JWT, then call `enforce_scope()` - the one function you complete.
 
 ![Secure server](./images/bsa-3-server.png?raw=true "Secure server")
 
@@ -308,7 +294,7 @@ This is a real **FastMCP** server exposing three tools (`add`, `multiply`, `divi
 code -d ../extra/secure_server_complete.txt secure_server.py
 ```
 
-The provided code already authenticates the JWT (a missing or bad token raises **401**). You merge in **`enforce_scope(claims, tool_name)`**: read the token's scopes and raise a **403** `ToolError` if they don't include `tools:<tool_name>`. Because the check is in middleware, it protects every tool by default.
+Authentication is already provided (missing or bad token -> **401**). You merge in **`enforce_scope(claims, tool_name)`**: raise a **403** `ToolError` unless the token's scopes include `tools:<tool_name>`. Being in middleware, it protects every tool by default.
 
 ![Building the secure MCP server](./images/bsa-3-build.png?raw=true "Building the secure MCP server")
 
@@ -359,7 +345,7 @@ Same server, different access levels, driven entirely by signed token scopes. Ch
 
 <br><br>
 
-> **What the real spec requires beyond this lab.** The shape you just built - authenticate every call, authorize per tool, do both in middleware - is right. The details are simplified so the mechanism stays visible. In production, per MCP spec revision **2026-07-28**: a protected MCP server is an **OAuth 2.1 resource server**, not a hand-rolled token authority; it **MUST** publish protected-resource metadata (**RFC 9728**) so clients can discover the authorization server; and tokens are **audience-bound** (**RFC 8707**) - a token minted for another service must be rejected and must never be forwarded upstream, which is the *confused deputy* rule. Note also that the spec deliberately sets **no scope-naming scheme**: `tools:<name>` is this workshop's convention, not a standard. Pick one and enforce it in middleware. (That same revision made MCP stateless - no session header, no `initialize` handshake - and changed nothing about the check you just wrote. An authorization invariant enforced per call survives a transport redesign.)
+> **Beyond this lab.** The shape is right - authenticate every call, authorize per tool, both in middleware - but the details are simplified. Per MCP spec revision **2026-07-28**, a protected server is an **OAuth 2.1 resource server**, must publish protected-resource metadata (**RFC 9728**), and must reject tokens not audience-bound to it (**RFC 8707**) - the *confused deputy* rule. The spec sets no scope-naming scheme: `tools:<name>` is this workshop's convention. The slides cover the rest.
 
 <br><br>
 
@@ -377,10 +363,6 @@ You'll see `'scope': 'tools:add'` - the limited client's token never carries the
 
 <br><br>
 
-> **Invariant lens:** `enforce_scope()` is a *precondition* on every tool call, asserted in middleware — the invariant "no call runs without a token that carries its scope" holds for every tool by default, including tools you add later.
-
-<br><br>
-
 **Key Takeaways:**
 - **Authenticate every MCP call** - an unauthenticated tool call should never reach your tools.
 - **Scope tokens per tool** - least privilege means a client gets exactly the tools it needs and nothing more.
@@ -394,7 +376,7 @@ You'll see `'scope': 'tools:add'` - the limited client's token never carries the
 
 **Lab 4: Hardening HelpBot's RAG Pipeline Against Poisoned Documents**
 
-**Purpose: In this lab, we'll defend HelpBot's RAG pipeline against document poisoning. We'll see how a malicious document injected into the knowledge base can hijack the model with hidden instructions and phish users, then implement defensive layers - source allowlisting, injection detection, relevance filtering, and output scanning - to neutralize the attack.**
+**Purpose: Defend HelpBot's RAG pipeline against document poisoning. See how one malicious document in the knowledge base hijacks the model and phishes users, then add four defensive layers - source allowlisting, injection detection, relevance filtering, and output scanning - to neutralize it.**
 
 > **New terms in this lab:** **RAG (Retrieval-Augmented Generation)** means the agent answers by first *retrieving* relevant chunks from a knowledge base and feeding them to the model. **Document poisoning** is slipping a malicious document into that knowledge base so its hidden instructions reach the model as if they were trusted content. A **source allowlist** trusts only chunks that came from known, verified documents.
 
@@ -414,13 +396,13 @@ cd /workspaces/secure-agents/rag
 code docs/OmniTech_Security_Bulletin.txt
 ```
 
-It looks like a legitimate OmniTech bulletin, but it carries three attacks: a hidden `[SYSTEM OVERRIDE]` **prompt injection**, a **phishing URL** (`https://omnitech-secure-verify.com/reset`), and a **social-engineering** instruction to email full credit card numbers for "refund verification."
+It reads like a legitimate OmniTech bulletin but carries three attacks: a hidden `[SYSTEM OVERRIDE]` **prompt injection**, a **phishing URL**, and a **social-engineering** instruction to email full credit card numbers for "refund verification."
 
 ![The poisoned document](./images/bsa-4-poison.png?raw=true "The poisoned document")
 
 <br><br>
 
-3. Build the vector database. `kb.py` (shared by both versions) opens a **real local Chroma vector database**, runs **semantic similarity** search with real embeddings, and sends the top chunks to a real model. `create_db.py` chunks every document in `docs/` - the legitimate handbook and returns policy **and** the poisoned bulletin - and embeds them all into the same collection:
+3. Build the vector database. `create_db.py` chunks every document in `docs/` - the legitimate handbook and returns policy **and** the poisoned bulletin - and embeds them into one real Chroma collection (`kb.py` does the retrieval for both versions):
 
 ```
 python create_db.py
@@ -453,7 +435,7 @@ How do I reset my password?
 How do I get a refund?
 ```
 
-On the first, watch the **SOURCES** and **ANSWER**: because the poisoned bulletin really *is* about password resets, it scores a high similarity, `OmniTech_Security_Bulletin_2024.pdf` shows up among the retrieved sources, and the answer hands the user the **phishing URL**. On the second, the poisoned document's instruction to share a full credit card number surfaces in the response. The vulnerable system trusts all retrieved context equally.
+Watch **SOURCES** and **ANSWER**. The poisoned bulletin really *is* about password resets, so it scores high, appears among the sources, and the answer hands the user the **phishing URL**. The refund answer surfaces its instruction to share a full card number. The vulnerable system trusts all retrieved context equally.
 
 ![Phishing URL in the answer](./images/bsa-4-phish.png?raw=true "Phishing URL in the answer")
 
@@ -469,11 +451,11 @@ code -d ../extra/rag_hardened_complete.txt rag_hardened.py
 
 <br><br>
 
-7. The `SecurityGuard` class on the left implements four layers of defense in depth:
-   - **Source allowlist** - only chunks from known, verified documents are trusted (the poisoned bulletin is not on the list)
-   - **Injection detection** - regex patterns catch `[SYSTEM OVERRIDE]`, `ignore previous instructions`, `supersedes all previous`
-   - **Relevance threshold** - low-confidence chunks are dropped
-   - **Output scanning** - the final answer is scrubbed of phishing domains and sensitive-data requests
+7. The `SecurityGuard` class implements four layers:
+   - **Source allowlist** - trust only known documents (the bulletin isn't one)
+   - **Injection detection** - regex catches `[SYSTEM OVERRIDE]`, `ignore previous instructions`
+   - **Relevance threshold** - drop low-confidence chunks
+   - **Output scanning** - scrub phishing domains and sensitive-data requests from the answer
 
    `filter_chunks()` and `scan_output()` are the two checkpoints: one blocks bad input, one redacts bad output.
 
@@ -503,16 +485,16 @@ The startup output now labels each source `[TRUSTED]` or `[UNKNOWN]`.
 
 <br><br>
 
-11. **(Optional)** Prove the allowlist is what's carrying the defense. In `rag_hardened.py`, temporarily add `"OmniTech_Security_Bulletin_2024.pdf"` to the trusted-source list, re-run, and ask about the password reset again. The poisoned chunk is now trusted at the door - and you can watch the *later* layers (injection detection, output scanning) try to catch it on their own. Remove it again when you're done.
+11. **(Optional)** Prove the allowlist is carrying the defense: temporarily add `"OmniTech_Security_Bulletin_2024.pdf"` to the trusted-source list in `rag_hardened.py`, re-run, and ask about the password reset again. The poisoned chunk is now trusted at the door - watch the later layers try to catch it alone. Remove it when done.
 
 <br><br>
 
-> **Invariant lens:** the source allowlist is a *precondition on provenance* — a chunk reaches the model only if it came from a document you trust. That is why it beats content filtering: the attacker controls the text, but not where it came from.
+> **Why the allowlist is the strongest layer here:** the attacker controls the *text* of a poisoned document, but not *where it came from*. Filtering on provenance beats filtering on content.
 
 <br><br>
 
 **Key Takeaways:**
-- **Document poisoning is a precision attack, not a volume attack** - a handful of documents in a corpus of millions is enough to steer answers.
+- **Document poisoning is a precision attack** - a handful of documents in a corpus of millions is enough to steer answers.
 - **Treat retrieved content as untrusted input** - it can carry hidden instructions aimed at the model.
 - **Defense in depth wins** - source allowlists, injection detection, relevance filtering, and output scanning each catch what the others miss.
 - **Output scanning is the safety net** - it protects users even when a malicious chunk slips through input filtering.
@@ -524,11 +506,11 @@ The startup output now labels each source `[TRUSTED]` or `[UNKNOWN]`.
 
 **Lab 5: Auditing and Observability for Agents *(homework-capable)***
 
-**Purpose: In this lab, we'll make HelpBot observable using real OpenTelemetry. We'll wrap every tool call in an OTel span - trace IDs, span IDs, attributes, status - under one session trace, then run an anomaly detector over the captured spans to surface suspicious tool-call patterns. You can't defend what you can't see.**
+**Purpose: Make HelpBot observable with real OpenTelemetry. Wrap every tool call in a span - trace ID, span ID, attributes, status - under one session trace, then run an anomaly detector over the captured spans to surface suspicious patterns. You can't defend what you can't see.**
 
 > **This lab is designed to work as post-class homework if we run short on time.** It's self-contained and needs only the observability directory.
 
-> **New terms in this lab:** **observability** just means being able to see what your system actually did. **OpenTelemetry (OTel)** is the industry-standard library for recording that. A **span** is one timed record of one operation - like a log line with a stopwatch and a label. A **trace** ties together all the spans from one session via a shared **trace ID**. Real systems ship these to tools like Jaeger or a SIEM; here we keep them in memory so we can inspect them right away.
+> **New terms:** **observability** is being able to see what your system actually did. **OpenTelemetry (OTel)** is the standard library for recording it. A **span** is one timed record of one operation - a log line with a stopwatch and a label. A **trace** ties one session's spans together by a shared **trace ID**. Real systems ship these to Jaeger or a SIEM; here they stay in memory so you can inspect them immediately.
 
 <br>
 
@@ -546,7 +528,7 @@ cd /workspaces/secure-agents/observability
 code observable_agent.py
 ```
 
-Note the `REQUESTS` list of natural-language `(user, request)` pairs and the `SENSITIVE_TOOLS` set (`export_employee_data`, `send_company_email`, `update_salary`). A **real model** drives the agent: `choose_tool()` asks it to pick one tool per request and return JSON. The provided `build_tracer()` sets up a real **OpenTelemetry** tracer with an in-memory span exporter. Some requests are benign; `mallory` issues a burst of bulk-export requests and `bob` asks for a mass email - your instrumentation has to make all of that visible.
+Note the `REQUESTS` list of `(user, request)` pairs and the `SENSITIVE_TOOLS` set. A real model drives `choose_tool()`, which picks one tool per request and returns JSON. The provided `build_tracer()` sets up a real OTel tracer with an in-memory exporter. Some requests are benign; `mallory` issues a burst of bulk exports and `bob` asks for a mass email - your instrumentation has to make that visible.
 
 ![Observable agent skeleton](./images/bsa-5-skeleton.png?raw=true "Observable agent skeleton")
 
@@ -563,10 +545,10 @@ code -d ../extra/observable_agent_complete.txt observable_agent.py
 <br><br>
 
 4. Two pieces to complete:
-   - **`instrument_call`** - opens an OpenTelemetry span (`tracer.start_as_current_span`) around the model's tool choice, sets attributes (`user`, `tool`, `args`, `sensitive`, `status`), marks unauthorized calls with an ERROR status, and prints a compact `[AUDIT]` line with the span's real `trace_id` / `span_id`.
-   - **`detect_anomalies`** - reads the **captured spans** from the in-memory exporter and flags denied calls, sensitive-tool bursts (3+ of the same call), and any user touching sensitive tooling.
+   - **`instrument_call`** - opens a span around the tool choice, sets attributes (`user`, `tool`, `args`, `sensitive`, `status`), marks unauthorized calls ERROR, and prints an `[AUDIT]` line with the real `trace_id` / `span_id`.
+   - **`detect_anomalies`** - reads the captured spans and flags denied calls, sensitive-tool bursts (3+ of the same call), and any user touching sensitive tooling.
 
-   The authorization stub (`authorize`, only `alice` may call sensitive tools) and the OTel setup are already provided.
+   The `authorize` stub (only `alice` may call sensitive tools) and the OTel setup are provided.
 
 <br><br>
 
@@ -586,27 +568,27 @@ python observable_agent.py
 
 <br><br>
 
-7. Read the **`[AUDIT]`** stream. Every call is a real OpenTelemetry span sharing a single **trace_id** for the session, each with its own **span_id** - the same trace/span model you'd export to Jaeger, Tempo, or a SIEM.
+7. Read the **`[AUDIT]`** stream. Every call is a real span sharing one **trace_id** for the session, each with its own **span_id** - the same model you'd export to Jaeger, Tempo or a SIEM.
 
 <br><br>
 
-8. Look at the **TELEMETRY SUMMARY** - tool spans, sensitive calls, and denied calls, all read back from the captured spans. These are the metrics you'd graph on a dashboard.
+8. Look at the **TELEMETRY SUMMARY** - tool spans, sensitive calls and denied calls, read back from the captured spans. These are the metrics you'd graph on a dashboard.
 
 ![Telemetry summary](./images/bsa-5-summary.png?raw=true "Telemetry summary")
 
 <br><br>
 
-9. Now the **ANOMALY DETECTION** section. The detector flags `mallory`'s denied export attempts, the **BURST** of three rapid export calls, and surfaces every user who touched sensitive tooling for review. That is the jump from *logging events* to *finding patterns* - the difference between "we have logs" and "we noticed the attack."
+9. Now **ANOMALY DETECTION**. The detector flags `mallory`'s denied exports, the **BURST** of three rapid export calls, and every user who touched sensitive tooling. That is the jump from *logging events* to *finding patterns* - the difference between "we have logs" and "we noticed the attack."
 
 ![Anomaly detection](./images/bsa-5-anomaly.png?raw=true "Anomaly detection")
 
 <br><br>
 
-10. **(Optional) Add a new action and validate it through the logs alone.** Add `"update_salary"` to the `TOOLS` list, add it to the tool names in `TOOL_SYSTEM` so the model may choose it, and add a request that exercises it - e.g. `("mallory", "Update employee E1002's salary to $200k.")`. Re-run. The new action flows through the **same** instrumentation with no new logging code: a span is emitted, the `[AUDIT]` line shows `tool=update_salary sensitive=True status=denied`, and `detect_anomalies` surfaces it automatically.
+10. **(Optional)** Add `"update_salary"` to `TOOLS` and to the tool names in `TOOL_SYSTEM`, then add a request like `("mallory", "Update employee E1002's salary to $200k.")` and re-run. The new action flows through the **same** instrumentation with no new logging code - a span is emitted, the `[AUDIT]` line shows `status=denied`, and `detect_anomalies` surfaces it automatically.
 
 <br><br>
 
-> **Invariant lens:** this is the one lab that does *not* add a precondition. Labs 1-4 are **preventive** controls - they decide whether an action runs. Observability is the **detective** control that sits underneath them: its invariant is *every tool call leaves a span*, which is what lets you find the attacks your preconditions got wrong. You need both; a system with only preventive controls fails silently.
+> **Note:** this is the one lab that adds no precondition. Labs 1-4 are **preventive** - they decide whether an action runs. Observability is the **detective** layer underneath: it finds the attacks your preventive controls got wrong. A system with only preventive controls fails silently.
 
 <br><br>
 
@@ -625,71 +607,40 @@ python observable_agent.py
 
 ### Where HelpBot ends up
 
-Trace the layers back through the workshop. The agent that leaked its system
-prompt, obeyed a poisoned ticket, exposed unscoped tools, served phishing URLs
-from its knowledge base, and did all of it invisibly in Lab 1 now: blocks
-jailbreaks and redacts PII (Lab 1), refuses tools outside its task and gates the
-risky ones (Lab 2), authenticates and scopes every MCP call (Lab 3), filters
-poisoned knowledge and scrubs its output (Lab 4), and records every action for
-detection and forensics (Lab 5). No single control carried the load - together
-they are defense in depth for an agent.
+The agent that leaked its system prompt, obeyed a poisoned ticket, exposed unscoped
+tools, served phishing URLs and did all of it invisibly now: blocks jailbreaks and
+redacts PII (Lab 1), refuses tools outside its task and gates the risky ones (Lab 2),
+authenticates and scopes every MCP call (Lab 3), filters poisoned knowledge and scrubs
+its output (Lab 4), and records every action for detection and forensics (Lab 5). No
+single control carried the load - together they are defense in depth for an agent.
 
-**Take it further.** The patterns here - input/output validation, least
-privilege, scoped auth, retrieval hygiene, telemetry - map directly onto the
-current standards. Worth reading next:
+**The layer we did not build.** Everything here constrains what the agent *decides*.
+None of it constrains the *process* it runs in - sandboxing, filesystem scope, egress
+allowlists, keeping credentials out of context. That layer doesn't depend on the model
+behaving, which is why it holds when the others are wrong. We cover it on the slides;
+if you do one thing after today, sandbox your agent.
 
-- **OWASP Top 10 for LLM Applications (2026 revision)** - note that *Excessive
-  Agency* climbed to **LLM03** on the strength of real agentic incidents, and
-  *System Prompt Leakage* was broadened and renamed *Hidden Context Exposure*.
-- **OWASP Top 10 for Agentic Applications (ASI01-ASI10)** - the agent-specific
-  companion list: goal hijack, tool misuse, identity and privilege abuse,
-  memory and context poisoning, rogue agents.
-- **MITRE ATLAS** - in particular `AML.T0110 AI Agent Tool Poisoning`, the
-  MCP-specific technique, alongside the prompt-injection and RAG-poisoning
-  techniques this workshop maps to.
-- **"Careful adoption of agentic AI services" (2026)** - joint guidance from six
-  Five Eyes cyber agencies (ASD's ACSC, CISA, NSA, Canadian Cyber Centre,
-  NCSC-NZ, NCSC-UK) on operating agents safely.
+**And keep an eye on state.** Anything an agent persists becomes an input to its next
+run, and the poisoning usually happens during summarization - so the run that plants it
+looks normal. Per-session budgets reset; a payload in persistent memory does not. Treat
+a memory write like any other privileged action: tag its provenance, validate on write,
+expire it on a clock.
 
-**The layer we did not build.** Everything in these five labs constrains what the
-agent *decides* - what it may read, call, answer with, and be seen doing. None of
-it constrains the *process* the agent runs in. In production that fifth layer is
-the one that holds when the others are wrong:
+**Worth reading next:**
 
-- **Isolate the process** - a sandbox, container or microVM. Weakest to
-  strongest: shared-kernel sandbox, Docker, gVisor, Firecracker.
-- **Scope the filesystem** - mount only what the task needs, read-only where
-  possible; exclude `.env`, `~/.ssh`, `~/.aws/credentials`, `*.pem`.
-- **Allowlist egress** - deny network by default, permit named hosts. This is
-  what turns a successful injection into a failed exfiltration.
-- **Keep credentials out of context** - a proxy injects the token so the agent
-  never holds it.
+- **OWASP Top 10 for LLM Applications (2026)** - *Excessive Agency* is now LLM03, and
+  *System Prompt Leakage* was broadened into *Hidden Context Exposure*.
+- **OWASP Top 10 for Agentic Applications (ASI01-ASI10)** - the agent-specific companion
+  list: goal hijack, tool misuse, identity abuse, memory poisoning, rogue agents.
+- **MITRE ATLAS** - notably `AML.T0110 AI Agent Tool Poisoning` (the MCP case) and
+  `AML.T0080 AI Agent Context Poisoning`, filed under *Persistence*.
+- **"Careful adoption of agentic AI services" (2026)** - joint guidance from six Five
+  Eyes cyber agencies on operating agents safely.
+- **Anthropic, *Securely deploying AI agents*** - the most concrete public write-up of
+  the containment layer above.
 
-None of these depend on the model behaving, which is exactly why they belong
-underneath everything else. Anthropic's *Securely deploying AI agents* guide is
-the most concrete public write-up.
-
-A natural next step is a full threat model of your own agent, a containment pass
-on the environment it runs in, and a red-team pass against both.
-
-**And keep an eye on state.** An agent that runs for hours, or resumes across
-sessions, carries its own memory forward - and anything it persists becomes an
-input to its next run. Published work has payloads written into agent memory by
-the *summarization* step surviving 100+ later sessions, long after the poisoned
-content left the context window. That is OWASP **ASI06 Memory & Context
-Poisoning** and MITRE **AML.T0080**, filed under *Persistence*. Treat a memory
-write like any other privileged action: tag its provenance, validate it on write,
-and expire it on a clock.
-
-**One thing to keep an eye on.** Both halves of this loop are being automated at
-once. On the defensive side, the review layer is shifting from "a human approves
-each step" to "a machine screens every step" - the reason `approve()` in Lab 2 is
-a policy hook rather than a person. On the offensive side, frontier-grade
-exploitation is becoming a *licensed* capability handed to vetted defenders. The
-practical takeaway is the same either way: the controls you built today have to
-hold up against tooling that finds bugs faster than a human review cycle can
-close them - which is exactly the argument for enforcing them in code rather than
-in process.
+A natural next step is a threat model of your own agent, a containment pass on the
+environment it runs in, and a red-team pass against both.
 
 <br><br>
 
