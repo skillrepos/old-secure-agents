@@ -37,7 +37,7 @@ Click here ➡️  [![Open in GitHub Codespaces](https://github.com/codespaces/b
 
 **3. Then click on the option to create a new codespace.**
 
-![Creating new codespace from button](./images/31ai1.png?raw=true "Creating new codespace from button")
+![Creating new codespace from button](./images/bsa1.png?raw=true "Creating new codespace from button")
 
 This will run for a long time while it gets everything ready. Leave it building
 and set up your Groq key (step 4) while you wait.
