@@ -2,9 +2,9 @@
 Lab 1 - Implementing Guardrails (COMPLETE REFERENCE)
 
 A lightweight, dependency-free guardrails pipeline modeled on the validator
-pattern used by frameworks like Guardrails.ai and Llama Guard. Input guards
-run BEFORE the model; output guards run AFTER, before the response reaches
-the user. Each guard returns (ok, reason, maybe_fixed_text).
+pattern used by frameworks like Guardrails.ai. Input guards run BEFORE the
+model; output guards run AFTER, before the response reaches the user. Each
+guard returns (ok, reason, maybe_fixed_text).
 """
 import re
 import os

@@ -19,11 +19,20 @@
 #     set GROQ_API_KEY to use it for the model labs (faster, free tier). Groq
 #     also enables the model-based gpt-oss-safeguard safety classifier in Lab 1.
 
-chromadb>=0.5
+# Version floors/ceilings verified 2026-09-05 against what a fresh Codespace
+# actually installs today: chromadb 1.5.9, fastmcp 4.0.3, pyjwt 2.13.0,
+# opentelemetry-sdk 1.44.0. Upper bounds keep a major release mid-delivery
+# from breaking a lab; re-test and raise them deliberately.
+chromadb>=1.5,<2
 
-# Lab 3: real MCP server + scoped JWT auth
-fastmcp>=2.0
-pyjwt>=2.8
+# Lab 3: real MCP server + scoped JWT auth.
+# FastMCP 4.0 went stable 2026-08-31. Lab 3 is verified on 4.0.3: it uses only
+# the generic Middleware / on_call_tool / get_http_headers / ToolError surface,
+# which survived the 2.x -> 3.x -> 4.x transitions untouched.
+fastmcp>=4.0,<5
+# 2.13+ rejects empty HMAC keys and binds the header 'alg' to the key during
+# verification, so the algorithms=[] allowlist in auth.py cannot be bypassed.
+pyjwt>=2.13,<3
 
 # Lab 5: real OpenTelemetry instrumentation
-opentelemetry-sdk>=1.20
+opentelemetry-sdk>=1.20,<2

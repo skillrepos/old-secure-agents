@@ -2,9 +2,9 @@
 Lab 1 - Implementing Guardrails (SKELETON)
 
 A lightweight guardrails pipeline modeled on the validator pattern used by
-frameworks like Guardrails.ai and Llama Guard. Input guards run BEFORE the
-model; output guards run AFTER, before the response reaches the user. Each
-guard returns (ok, reason, maybe_fixed_text).
+frameworks like Guardrails.ai. Input guards run BEFORE the model; output
+guards run AFTER, before the response reaches the user. Each guard returns
+(ok, reason, maybe_fixed_text).
 
 NOTE: incomplete. Merge in the validator bodies and guard lists from
 extra/guardrails_complete.txt before running.

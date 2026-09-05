@@ -1,6 +1,6 @@
 # Building Secure AI Agents: Defense-First Development
 
-## Half-day workshop (3 hours) &mdash; Revision 1.0
+## Half-day workshop (3 hours) &mdash; Revision 1.5
 
 These instructions will guide you through configuring a GitHub Codespaces
 environment that you can use to run the workshop labs.
@@ -39,15 +39,8 @@ Click here ➡️  [![Open in GitHub Codespaces](https://github.com/codespaces/b
 
 ![Creating new codespace from button](./images/31ai1.png?raw=true "Creating new codespace from button")
 
-This will run for a long time while it gets everything ready.
-
-After the initial startup, it will run a script to setup the python environment and install needed python pieces. This will take several more minutes to run. It will look like this while this is running.
-
-![Final prep](./images/31ai2.png?raw=true "Final prep")
-
-The codespace is ready to use when you see a prompt like the one shown below in its terminal.
-
-![Ready to use](./images/31ai3.png?raw=true "Ready to use")
+This will run for a long time while it gets everything ready. Leave it building
+and set up your Groq key (step 4) while you wait.
 
 **4. Set up your Groq API key (for the cloud LLM).**
  
@@ -76,7 +69,7 @@ The labs can still run without a key &mdash; they fall back to the local Ollama 
 
 <br><br>
 
-**4. Ensure the codespace is done setting up.** 
+**5. Ensure the codespace is done setting up.** 
 After the initial startup, it will run a script to setup the python environment and install needed python pieces. This will take several more minutes to run. It will look like this while this is running.
 
 ![Final prep](./images/31ai2.png?raw=true "Final prep")
@@ -88,7 +81,7 @@ The codespace is ready to use when you see a prompt like the one shown below in 
 
 <br><br>
 
-**5. Set your Groq key in the codespace.**
+**6. Set your Groq key in the codespace.**
 In the codespace **TERMINAL**, run the command below, paste your key when
 prompted, and hit *Enter*:
 
@@ -100,7 +93,7 @@ You should see that `AGENT_PROVIDER` and `GROQ_API_KEY` are set.
 
 <br><br>
 
-**6. Run the warm-up script for faster first responses.**
+**7. Run the warm-up script for faster first responses.**
 
 ```
 python scripts/warmup_ollama.py
@@ -108,7 +101,7 @@ python scripts/warmup_ollama.py
 
 <br><br>
 
-**7. Open `labs.md`** and follow along. You can open it in the codespace
+**8. Open `labs.md`** and follow along. You can open it in the codespace
 (right-click > *Open Preview*) or in a separate browser tab.
 
 **Now you are ready for the labs!**
@@ -131,7 +124,7 @@ python scripts/warmup_ollama.py
 
 1. Go to https://github.com/codespaces
 2. Find the codespace, right-click, and select *Open in browser*
-3. Repeat steps 5 & 6 above to set the Groq key and re-run the warm-up.
+3. Repeat steps 6 & 7 above to set the Groq key and re-run the warm-up.
 
 <br><br>
 
