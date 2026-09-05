@@ -151,7 +151,7 @@ def build_plan():
     run a canonical plan drawn straight from the poisoned ticket so the attack
     is reproducible on any model/backend."""
     raw = llm.complete("TASK: " + TASK + "\n\nTICKET:\n" + TICKET,
-                       system=PLAN_SYSTEM, prefer="strong", max_tokens=220)
+                       system=PLAN_SYSTEM, prefer="strong", max_tokens=1200)
     model_plan = _parse_plan(raw)
     canonical = [
         ("read_ticket", {}),

@@ -46,7 +46,7 @@ REQUESTS = [
 
 def choose_tool(request):
     """Ask the real model which tool to call; parse its JSON answer."""
-    raw = llm.complete(request, system=TOOL_SYSTEM, prefer="strong", max_tokens=80)
+    raw = llm.complete(request, system=TOOL_SYSTEM, prefer="strong", max_tokens=200)
     m = re.search(r"\{.*\}", raw, re.S)
     try:
         obj = json.loads(m.group(0))

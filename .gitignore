@@ -19,3 +19,17 @@ mcp/release_manifest.json
 # Applications
 *.pptx
 *qa.md
+
+# TechUpSkills course-repo conventions
+*.pptx
+*.pptm
+*.potx
+*.ppt
+*[qQ][aA]*.md
+*.md
+!README.md
+!README-Codespace.md
+!LICENSE.md
+!labs.md
+!.github/copilot-instructions.md
+_*/
