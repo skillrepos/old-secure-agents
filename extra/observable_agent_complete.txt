@@ -11,6 +11,8 @@ import os
 import re
 import sys
 
+# Real OpenTelemetry: a TracerProvider makes spans, an in-memory exporter
+# collects them so the anomaly detector can read them back at the end.
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
@@ -20,6 +22,25 @@ from opentelemetry.trace import Status, StatusCode
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "common"))
 import llm
 
+
+# ===========================================================================
+#  HOW ONE REQUEST FLOWS THROUGH THIS FILE
+#
+#      (user, request) -> instrument_call()     opens a "tool.call" span
+#                           -> choose_tool()     the real model picks a tool
+#                           -> authorize()       allowed / denied
+#                           -> span attributes   user, tool, sensitive, status
+#                           -> [AUDIT] line      trace_id / span_id printed
+#      ...after all 7 requests:
+#      detect_anomalies(spans) -> denied calls, sensitive-tool bursts, review list
+#
+#  Nothing here PREVENTS a bad call - this lab is the detective layer.
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+#  THE AGENT (provided) - tools, the model's tool-picking prompt, a scripted
+#  session of 7 requests (mallory's three exports are the burst to catch)
+# ---------------------------------------------------------------------------
 TOOLS = ["lookup_benefits", "check_pto", "export_employee_data", "send_company_email"]
 SENSITIVE_TOOLS = {"export_employee_data", "send_company_email", "update_salary"}
 
@@ -57,6 +78,9 @@ def authorize(user, tool):
     return not (tool in SENSITIVE_TOOLS and user != "alice")
 
 
+# ---------------------------------------------------------------------------
+#  WHAT YOU BUILD - instrument_call() records; detect_anomalies() reviews
+# ---------------------------------------------------------------------------
 def instrument_call(tracer, user, request):
     """Run one agent turn inside an OpenTelemetry span with rich attributes."""
     with tracer.start_as_current_span("tool.call") as span:
@@ -98,6 +122,9 @@ def detect_anomalies(spans):
     return findings
 
 
+# ---------------------------------------------------------------------------
+#  TRACER SETUP + MAIN (provided)
+# ---------------------------------------------------------------------------
 def build_tracer():
     """Provided: set up a real OTel tracer with an in-memory span exporter."""
     exporter = InMemorySpanExporter()

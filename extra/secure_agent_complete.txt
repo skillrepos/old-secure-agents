@@ -114,7 +114,7 @@ def allowed_tools(task):
 
 
 def approve(tool, args):
-    """Control 2 - HUMAN APPROVAL GATE.
+    """Control 2 - APPROVAL GATE (a policy hook: a person, a static policy, or a classifier).
 
     Low-risk tools run freely. High-risk tools pause for an operator. A real
     system would prompt a person here; in this unattended demo the operator

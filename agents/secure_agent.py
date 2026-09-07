@@ -17,7 +17,7 @@ watch the same poisoned ticket get contained.
 
 You will implement three functions:
   1. allowed_tools()  - least privilege: expose ONLY the tools the task needs.
-  2. approve()        - human approval gate for high-risk tools.
+  2. approve()        - approval gate for high-risk tools (a policy hook).
   3. within_budget()  - hard caps so a hijacked agent can't loop or escalate.
 """
 import json
@@ -111,7 +111,7 @@ def allowed_tools(task):
 
 
 def approve(tool, args):
-    """Control 2 - HUMAN APPROVAL GATE.
+    """Control 2 - APPROVAL GATE (a policy hook: a person, a static policy, or a classifier).
 
     TODO (merge): require approval for HIGH_RISK_TOOLS (deny in this demo) and
     allow everything else. Undefended baseline approves everything.

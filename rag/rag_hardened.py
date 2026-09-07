@@ -12,7 +12,24 @@ NOTE: incomplete. Merge in the logic from
 extra/rag_hardened_complete.txt before running.
 """
 import re
-from kb import kb_stats, retrieve, rag_answer
+from kb import kb_stats, retrieve, rag_answer   # provided: the Chroma retriever + answerer
+
+
+# ===========================================================================
+#  HOW A QUESTION FLOWS THROUGH THIS FILE
+#
+#      question -> retrieve() top-3 chunks from Chroma
+#               -> SecurityGuard.filter_chunks()   1. source allowlist
+#                                                  2. injection patterns
+#                                                  3. relevance threshold
+#               -> rag_answer() with ONLY the surviving chunks
+#               -> SecurityGuard.scan_output()     4. redact bad output
+#               -> printed answer  (+ 'report' shows every guard event)
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+#  THE FOUR POLICIES - plain data the guard checks against
+# ---------------------------------------------------------------------------
 
 # TODO (merge): TRUSTED_SOURCES allowlist
 TRUSTED_SOURCES = set()
@@ -23,6 +40,9 @@ BAD_OUTPUT_PATTERNS = []
 RELEVANCE_MIN = 0.0
 
 
+# ---------------------------------------------------------------------------
+#  THE GUARD - filter_chunks() before the model, scan_output() after it
+# ---------------------------------------------------------------------------
 class SecurityGuard:
     def __init__(self):
         self.events = []
@@ -48,6 +68,9 @@ class SecurityGuard:
             print(f"  [{kind}] {detail}")
 
 
+# ---------------------------------------------------------------------------
+#  THE QUESTION LOOP (provided) - type a question, 'report', or 'quit'
+# ---------------------------------------------------------------------------
 def main():
     count, sources = kb_stats()
     guard = SecurityGuard()

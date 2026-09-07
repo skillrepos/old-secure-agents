@@ -15,9 +15,25 @@ from fastmcp import FastMCP
 from fastmcp.server.middleware import Middleware
 from fastmcp.server.dependencies import get_http_headers
 from fastmcp.exceptions import ToolError
-import auth
+import auth   # provided: mint_token() / verify_token() with PyJWT
 
 
+# ===========================================================================
+#  HOW A TOOL CALL FLOWS THROUGH THIS SERVER
+#
+#      client  --tools/call-->  ScopeMiddleware.on_call_tool()
+#                                 1. no Bearer token?        -> 401
+#                                 2. token fails to verify?  -> 401
+#                                 3. enforce_scope()         -> 403 if the
+#                                    token lacks tools:<name>
+#                               -> the tool itself runs only if all three pass
+#
+#  The middleware wraps EVERY tool, so a new tool is protected by default.
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+#  AUTHENTICATION helpers (provided)
+# ---------------------------------------------------------------------------
 def _bearer(headers):
     """Pull the raw token out of an 'Authorization: Bearer ...' header."""
     value = headers.get("authorization", "")
@@ -26,6 +42,9 @@ def _bearer(headers):
     return None
 
 
+# ---------------------------------------------------------------------------
+#  AUTHORIZATION - the one function you build: per-tool scope check
+# ---------------------------------------------------------------------------
 def enforce_scope(claims, tool_name):
     """Per-tool authorization: the token must carry the tools:<name> scope."""
     # TODO (merge): read scopes from claims; raise ToolError 403 if the token
@@ -33,6 +52,9 @@ def enforce_scope(claims, tool_name):
     raise NotImplementedError("enforce_scope not implemented yet")
 
 
+# ---------------------------------------------------------------------------
+#  THE MIDDLEWARE (provided) - runs before every tools/call
+# ---------------------------------------------------------------------------
 class ScopeMiddleware(Middleware):
     """Authenticates the JWT and enforces per-tool scopes on every call."""
 
@@ -51,6 +73,10 @@ class ScopeMiddleware(Middleware):
         return await call_next(context)
 
 
+# ---------------------------------------------------------------------------
+#  THE SERVER + ITS TOOLS (provided) - nothing security-specific in here;
+#  the middleware above protects all three tools
+# ---------------------------------------------------------------------------
 mcp = FastMCP("omnitech-calc")
 mcp.add_middleware(ScopeMiddleware())
 

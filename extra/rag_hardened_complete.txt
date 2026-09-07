@@ -9,26 +9,49 @@ vector database used by the vulnerable version:
   4. Output scanning    - redact phishing URLs / sensitive-data requests
 """
 import re
-from kb import kb_stats, retrieve, rag_answer
+from kb import kb_stats, retrieve, rag_answer   # provided: the Chroma retriever + answerer
 
+
+# ===========================================================================
+#  HOW A QUESTION FLOWS THROUGH THIS FILE
+#
+#      question -> retrieve() top-3 chunks from Chroma
+#               -> SecurityGuard.filter_chunks()   1. source allowlist
+#                                                  2. injection patterns
+#                                                  3. relevance threshold
+#               -> rag_answer() with ONLY the surviving chunks
+#               -> SecurityGuard.scan_output()     4. redact bad output
+#               -> printed answer  (+ 'report' shows every guard event)
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+#  THE FOUR POLICIES - plain data the guard checks against
+# ---------------------------------------------------------------------------
+
+# 1. Only chunks from these PDFs are trusted (an allowlist).
 TRUSTED_SOURCES = {"account_security_handbook.pdf", "returns_policy.pdf"}
 
+# 2. A chunk containing any of these is a poisoned document -> dropped.
 INJECTION_PATTERNS = [
     r"system override", r"ignore previous instructions",
     r"supersedes all previous", r"overrides the standard",
     r"must follow this document first",
 ]
 
+# 4. Phishing domains / data-harvesting phrases the answer must never contain.
 BAD_OUTPUT_PATTERNS = [
     r"omnitech-secure-verify\.com", r"omnitech-billing-support\.com",
     r"full credit card number", r"date of birth to confirm",
     r"cvv",
 ]
 
-# Minimum cosine similarity (0..1) a chunk must have to be trusted.
+# 3. Minimum cosine similarity (0..1) a chunk must have to be used.
 RELEVANCE_MIN = 0.10
 
 
+# ---------------------------------------------------------------------------
+#  THE GUARD - filter_chunks() before the model, scan_output() after it
+# ---------------------------------------------------------------------------
 class SecurityGuard:
     def __init__(self):
         self.events = []
@@ -68,6 +91,9 @@ class SecurityGuard:
             print(f"  [{kind}] {detail}")
 
 
+# ---------------------------------------------------------------------------
+#  THE QUESTION LOOP (provided) - type a question, 'report', or 'quit'
+# ---------------------------------------------------------------------------
 def main():
     count, sources = kb_stats()
     guard = SecurityGuard()

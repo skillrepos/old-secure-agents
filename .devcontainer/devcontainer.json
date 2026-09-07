@@ -39,6 +39,7 @@
   },
   "postCreateCommand": "bash -i scripts/pysetup.sh py_env && bash scripts/startup_ollama.sh",
   "postAttachCommand": {
-    "ollama": "bash scripts/startup_ollama.sh --skip-pull"
+    "ollama": "bash scripts/startup_ollama.sh --skip-pull",
+    "merge-info": "code --install-extension ${containerWorkspaceFolder}/.devcontainer/merge-info-0.1.0.vsix --force || true"
   }
 }
