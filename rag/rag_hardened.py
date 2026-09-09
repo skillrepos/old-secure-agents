@@ -1,48 +1,36 @@
 """
-Lab 4 - Hardened RAG (SKELETON)
+Lab 4 - Hardened RAG
 
-Add a SecurityGuard with defense in depth, in front of the SAME Chroma vector
-database used by the vulnerable version:
-  1. Source allowlist  - only trust chunks from known PDFs
-  2. Injection detection - block chunks with override/jailbreak patterns
-  3. Relevance threshold - drop low-confidence (low-similarity) chunks
-  4. Output scanning    - redact phishing URLs / sensitive-data requests
+A SecurityGuard with defense in depth, in front of the SAME Chroma vector
+database the vulnerable version uses:
+  1. Source allowlist    - only trust chunks from known documents
+  2. Injection detection - drop chunks that carry override/jailbreak phrases
+  3. Relevance threshold - drop low-similarity chunks
+  4. Output scanning     - redact phishing URLs / sensitive-data requests
 
-NOTE: incomplete. Merge in the logic from
-extra/rag_hardened_complete.txt before running.
+    question -> retrieve() -> guard.filter_chunks() [1,2,3] -> rag_answer()
+             -> guard.scan_output() [4] -> answer     ('report' lists events)
+
+Run it:  python rag_hardened.py   (kb.py does retrieval + answering - provided)
 """
 import re
-from kb import kb_stats, retrieve, rag_answer   # provided: the Chroma retriever + answerer
+from kb import kb_stats, retrieve, rag_answer
 
 
 # ===========================================================================
-#  HOW A QUESTION FLOWS THROUGH THIS FILE
-#
-#      question -> retrieve() top-3 chunks from Chroma
-#               -> SecurityGuard.filter_chunks()   1. source allowlist
-#                                                  2. injection patterns
-#                                                  3. relevance threshold
-#               -> rag_answer() with ONLY the surviving chunks
-#               -> SecurityGuard.scan_output()     4. redact bad output
-#               -> printed answer  (+ 'report' shows every guard event)
-# ===========================================================================
-
-# ---------------------------------------------------------------------------
 #  THE FOUR POLICIES - plain data the guard checks against
-# ---------------------------------------------------------------------------
-
-# TODO (merge): TRUSTED_SOURCES allowlist
+# ===========================================================================
+# TODO (merge): the four policies -
+#   TRUSTED_SOURCES (allowlist), INJECTION_PATTERNS, RELEVANCE_MIN, BAD_OUTPUT_PATTERNS
 TRUSTED_SOURCES = set()
-
-# TODO (merge): INJECTION_PATTERNS, BAD_OUTPUT_PATTERNS, RELEVANCE_MIN
 INJECTION_PATTERNS = []
-BAD_OUTPUT_PATTERNS = []
 RELEVANCE_MIN = 0.0
+BAD_OUTPUT_PATTERNS = []
 
 
-# ---------------------------------------------------------------------------
+# ===========================================================================
 #  THE GUARD - filter_chunks() before the model, scan_output() after it
-# ---------------------------------------------------------------------------
+# ===========================================================================
 class SecurityGuard:
     def __init__(self):
         self.events = []
@@ -52,12 +40,12 @@ class SecurityGuard:
 
     def filter_chunks(self, chunks):
         """Apply all input-side checks; return only chunks that pass."""
-        # TODO (merge): allowlist + injection + relevance checks with logging
+        # TODO (merge): allowlist -> injection -> relevance, logging each drop
         raise NotImplementedError("filter_chunks not implemented yet")
 
     def scan_output(self, text):
         """Redact dangerous content the LLM may still have produced."""
-        # TODO (merge): redact BAD_OUTPUT_PATTERNS
+        # TODO (merge): replace any BAD_OUTPUT_PATTERNS match with [REDACTED]
         raise NotImplementedError("scan_output not implemented yet")
 
     def report(self):
@@ -68,9 +56,9 @@ class SecurityGuard:
             print(f"  [{kind}] {detail}")
 
 
-# ---------------------------------------------------------------------------
+# ===========================================================================
 #  THE QUESTION LOOP (provided) - type a question, 'report', or 'quit'
-# ---------------------------------------------------------------------------
+# ===========================================================================
 def main():
     count, sources = kb_stats()
     guard = SecurityGuard()
@@ -93,12 +81,12 @@ def main():
         if not q:
             continue
         hits = retrieve(q, k=3)
-        safe = guard.filter_chunks(hits)
+        safe = guard.filter_chunks(hits)          # checkpoint 1: before the model
         print("\nSOURCES (after filtering):")
         for h in safe:
             print(f"  [{h['relevance']}] {h['source']}")
         answer = rag_answer(q, safe)
-        answer = guard.scan_output(answer)
+        answer = guard.scan_output(answer)        # checkpoint 2: after the model
         print("\nANSWER:")
         print(answer)
 

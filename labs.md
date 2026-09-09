@@ -1,7 +1,7 @@
 # Building Secure AI Agents: Defense-First Development
 ## Half-day workshop (3 hours)
 ## Session labs
-## Revision 1.8 - 09/09/26
+## Revision 1.9 - 09/09/26
 
 
 **Follow the startup instructions in the README.md file IF NOT ALREADY DONE!**
@@ -141,9 +141,7 @@ It pushes seven requests through the pipeline, replays one leaked reply to trip 
 
 **Lab 2: Securing Agent Tool Calls - Least Privilege, Approval, and Budgets**
 
-**Purpose: Constrain HelpBot so a hijacked prompt can't make it misuse its tools. Start from the agent obeying a poisoned support ticket - exporting employee data, emailing it out, deleting the audit log - then add three controls that contain the same attack: a least-privilege allowlist, an approval gate, and hard budgets.**
-
-> **New terms** (skip if you build agents already): an **agent** is an LLM in a loop deciding which **tools** to call. **Indirect prompt injection** is malicious instructions arriving *inside data the agent reads* - here, a hidden note in a ticket. **Least privilege** means offering only the tools a task needs; an **allowlist** is that permitted set. An **approval gate** pauses a risky action; a **budget** caps how many steps one run may take.
+**Purpose: Constrain HelpBot so a hijacked prompt can't make it misuse its tools. Watch the agent obey a poisoned support ticket - exporting employee data, emailing it out, deleting the audit log - then add the three controls that contain the same attack. The terms used here are defined on the *Lab 2 vocabulary* slide.**
 
 <br>
 
@@ -155,13 +153,13 @@ cd /workspaces/secure-agents/agents
 
 <br><br>
 
-2. Open the agent skeleton and read the scenario:
+2. Open the agent and read the scenario at the top:
 
 ```
 code secure_agent.py
 ```
 
-Three things to see. `TICKET` looks benign ("summarize the Q3 benefits changes") but hides attacker instructions in an HTML comment - the injection payload. Tools split into `SAFE_TOOLS` and `HIGH_RISK_TOOLS` (`export_data`, `send_email`, `delete_records`). A real model reads the ticket in `build_plan()` and proposes which to call.
+`TICKET` looks benign ("summarize the Q3 benefits changes") but hides attacker instructions in an HTML comment. The tools split into `SAFE_TOOLS` and `HIGH_RISK_TOOLS`. Below them are the three controls you will build - as shipped, each is a no-op. (`agent_harness.py`, provided, asks the real model for a plan and runs it.)
 
 ![Indirect injection](./images/bsa-2-injection.png?raw=true "Indirect injection")
 
@@ -173,13 +171,13 @@ Three things to see. `TICKET` looks benign ("summarize the Q3 benefits changes")
 python secure_agent.py
 ```
 
-The three control functions are still no-ops, so `export_data`, `send_email` and `delete_records` all fire, ending in `BREACH` - undefended HelpBot doing exactly what the ticket told it to. (The model's plan varies run to run; the canonical attack is replayed so the breach is reproducible.)
+With no controls, `export_data`, `send_email` and `delete_records` all fire, ending in `BREACH`. (The model's own plan varies run to run; the canonical attack is replayed so the breach is reproducible.)
 
 ![The breach](./images/bsa-2-breach.png?raw=true "The breach")
 
 <br><br>
 
-4. Open the diff-and-merge view to build the three controls:
+4. Open the diff-and-merge view:
 
 ```
 code -d ../extra/secure_agent_complete.txt secure_agent.py
@@ -189,18 +187,11 @@ code -d ../extra/secure_agent_complete.txt secure_agent.py
 
 <br><br>
 
-5. These three functions are the whole defense:
-   - **`allowed_tools(task)`** - *least privilege.* Offer only the tools this job needs. `export_data` and `delete_records` are never offered, so a hijacked plan can't reach them.
-   - **`approve(tool, args)`** - *the approval gate.* High-risk tools pause for an approver, who denies the unexpected outside-address send.
-   - **`within_budget(steps_taken, executed)`** - *budgets.* Stop once the run exceeds `MAX_STEPS`, so a bypassed agent can't loop or escalate.
+5. Merge the three controls - `allowed_tools` (least privilege), `approve` (the approval gate) and `within_budget` (budgets). Hover any red block for a note on what it does. When no differences remain, close the diff tab to save.
 
 <br><br>
 
-6. Merge all three sections into the skeleton and close the diff tab to save.
-
-<br><br>
-
-7. Run the updated secured agent:
+6. Run the secured agent:
 
 ```
 python secure_agent.py
@@ -208,29 +199,22 @@ python secure_agent.py
 
 ✓ **Success looks like:** the **SECURED AGENT** section shows `export_data` **BLOCKED** (allowlist), `send_email` **BLOCKED** (approval denied), the remaining steps **HALTED** (budget), and ends `contained (no high-risk tool fired)` - while the **UNDEFENDED** section above still ends in `BREACH`. If the secured run also shows `BREACH`, a control didn't merge; reopen the diff at Step 4.
 
-<br><br>
-
-8. Compare the two runs: same plan, different outcome. The legitimate `read_ticket` and `summarize` steps still succeed, so HelpBot completes the job it was actually hired to do.
-
 ![Same hijack, contained](./images/bsa-2-contained.png?raw=true "Same hijack, contained")
 
 <br><br>
 
-9. All three are necessary: least privilege removes tools the task never needs, the gate catches abuse of a tool the task *does* use (`send_email`), and budgets cap the blast radius if anything slips through.
-
-   Note *who* sits in that gate. `approve()` is a **policy hook**, not a synonym for "a person" - it can be a human, a static policy, or a classifier like the one in Lab 1. Only the evaluator is pluggable; the rule is unchanged. The slides cover the industry data behind that shift.
+7. Compare the two runs: same plan, different outcome. `read_ticket` and `summarize` still succeed, so HelpBot completes the job it was hired to do. Note that the approver inside `approve()` is a **policy hook** - a person, a static policy, or a classifier like the one in Lab 1; the rule is the same whoever evaluates it.
 
 <br><br>
 
-10. **(Optional)** In `approve()`, temporarily `return True` for everything and re-run - `send_email` now fires. Put the denial back.
+8. **(Optional)** In `approve()`, temporarily `return True` for everything and re-run - `send_email` now fires. Put the denial back.
 
 <br><br>
 
 **Key Takeaways:**
-- **The agent will be talked into things** - indirect prompt injection means any data the agent reads can carry instructions. Assume the model will follow them.
+- **The agent will be talked into things** - any data it reads can carry instructions. Assume the model will follow them.
 - **Least privilege first** - the safest dangerous tool is the one you never hand the model for that task.
-- **Gate high-risk actions - and watch who is gating** - route consequential tools through an approver: human, policy, or classifier. A gate staffed only by a tired operator is a speed bump, not a control.
-- **Budget the blast radius** - hard caps on steps and tool calls keep a hijacked agent from looping or escalating, even when other controls miss.
+- **Gate the risky, budget the rest** - an approver catches abuse of a tool the task *does* need; a hard cap on actions limits the blast radius when everything else misses.
 
 <p align="center">
 <b>[END OF LAB]</b>
@@ -367,9 +351,7 @@ You'll see `'scope': 'tools:add'` - the limited client's token never carries the
 
 **Lab 4: Hardening HelpBot's RAG Pipeline Against Poisoned Documents**
 
-**Purpose: Defend HelpBot's RAG pipeline against document poisoning. See how one malicious document in the knowledge base hijacks the model and phishes users, then add four defensive layers - source allowlisting, injection detection, relevance filtering, and output scanning - to neutralize it.**
-
-> **New terms in this lab:** **RAG (Retrieval-Augmented Generation)** means the agent answers by first *retrieving* relevant chunks from a knowledge base and feeding them to the model. **Document poisoning** is slipping a malicious document into that knowledge base so its hidden instructions reach the model as if they were trusted content. A **source allowlist** trusts only chunks that came from known, verified documents.
+**Purpose: One malicious document in HelpBot's knowledge base hijacks the model and phishes users. See it happen, then add four defensive layers - source allowlisting, injection detection, relevance filtering and output scanning - that neutralize it. The terms used here are defined on the *Lab 4 vocabulary* slide.**
 
 <br>
 
@@ -381,37 +363,37 @@ cd /workspaces/secure-agents/rag
 
 <br><br>
 
-2. Open the poisoned document that simulates what an attacker might inject into the knowledge base:
+2. Open the poisoned document an attacker slipped into the knowledge base:
 
 ```
 code docs/OmniTech_Security_Bulletin.txt
 ```
 
-It reads like a legitimate OmniTech bulletin but carries three attacks: a hidden `[SYSTEM OVERRIDE]` **prompt injection**, a **phishing URL**, and a **social-engineering** instruction to email full credit card numbers for "refund verification."
+It reads like a legitimate bulletin but carries three attacks: a hidden `[SYSTEM OVERRIDE]` **prompt injection**, a **phishing URL**, and an instruction to email full credit card numbers for "refund verification".
 
 ![The poisoned document](./images/bsa-4-poison.png?raw=true "The poisoned document")
 
 <br><br>
 
-3. Build the vector database. `create_db.py` chunks every document in `docs/` - the legitimate handbook and returns policy **and** the poisoned bulletin - and embeds them into one real Chroma collection (`kb.py` does the retrieval for both versions):
+3. Build the vector database - every document in `docs/`, the two legitimate ones **and** the poisoned bulletin, chunked into one Chroma collection:
 
 ```
 python create_db.py
 ```
 
-You'll see each source and its chunk count, with the poisoned document flagged. (The first run downloads the small embedding model, ~30-60s; later runs are instant.)
+The poisoned source is flagged in the output. (The first run downloads a small embedding model, ~30-60 s.)
 
 ![Building the vector database](./images/bsa-4-builddb.png?raw=true "Building the vector database")
 
 <br><br>
 
-4. Run the **vulnerable** RAG system - HelpBot's RAG with no security defenses:
+4. Run the **vulnerable** RAG - no defenses at all:
 
 ```
 python rag_vulnerable.py
 ```
 
-You'll see the vector DB load, with the poisoned source mixed in among the legitimate documents. (The first model query includes a ~30-60s warm-up.)
+The poisoned source loads right alongside the legitimate documents.
 
 ![Loading the knowledge base](./images/bsa-4-kbload.png?raw=true "Loading the knowledge base")
 
@@ -426,13 +408,13 @@ How do I reset my password?
 How do I get a refund?
 ```
 
-Watch **SOURCES** and **ANSWER**. The poisoned bulletin really *is* about password resets, so it scores high, appears among the sources, and the answer hands the user the **phishing URL**. The refund answer surfaces its instruction to share a full card number. The vulnerable system trusts all retrieved context equally.
+The bulletin really *is* about password resets, so it scores high and the answer hands the user the **phishing URL**; the refund answer asks for a full card number. Every retrieved chunk is trusted equally.
 
 ![Phishing URL in the answer](./images/bsa-4-phish.png?raw=true "Phishing URL in the answer")
 
 <br><br>
 
-6. Now add defenses. Open the diff-and-merge view:
+6. Now add the defenses. Open the diff-and-merge view:
 
 ```
 code -d ../extra/rag_hardened_complete.txt rag_hardened.py
@@ -442,53 +424,38 @@ code -d ../extra/rag_hardened_complete.txt rag_hardened.py
 
 <br><br>
 
-7. The `SecurityGuard` class implements four layers:
-   - **Source allowlist** - trust only known documents (the bulletin isn't one)
-   - **Injection detection** - regex catches `[SYSTEM OVERRIDE]`, `ignore previous instructions`
-   - **Relevance threshold** - drop low-confidence chunks
-   - **Output scanning** - scrub phishing domains and sensitive-data requests from the answer
-
-   `filter_chunks()` and `scan_output()` are the two checkpoints: one blocks bad input, one redacts bad output.
+7. Merge the three blocks: the four **policies**, `filter_chunks()` (runs *before* the model: allowlist -> injection -> relevance) and `scan_output()` (runs *after* it). Hover any red block for a note. When no differences remain, close the diff tab to save.
 
 <br><br>
 
-8. Merge all sections into the skeleton and close the diff tab to save.
-
-<br><br>
-
-9. Run the hardened version against the same poisoned knowledge base:
+8. Run the hardened version against the same poisoned knowledge base:
 
 ```
 python rag_hardened.py
 ```
 
-The startup output now labels each source `[TRUSTED]` or `[UNKNOWN]`.
+Startup now labels each source `[TRUSTED]` or `[UNKNOWN]`.
 
 ![Trusted vs unknown sources](./images/bsa-4-trusted.png?raw=true "Trusted vs unknown sources")
 
 <br><br>
 
-10. Ask the same two questions again. This time the poisoned chunks are blocked at the source-allowlist stage, and any sensitive request that slips into the output is redacted - the answers now come only from the legitimate handbook and returns policy. Type `report` to see every security event, then `quit` to exit.
+9. Ask the same two questions again, then type `report`, then `quit`.
 
-   ✓ **Success looks like:** the password answer no longer contains `omnitech-secure-verify.com`, the refund answer no longer asks for a full card number, and `report` lists blocked chunks with the reason. If the phishing URL still appears, a layer didn't merge - reopen the diff at Step 6.
+✓ **Success looks like:** the password answer no longer contains `omnitech-secure-verify.com`, the refund answer no longer asks for a card number, and `report` lists the blocked chunks with the reason. If the phishing URL still appears, a block didn't merge - reopen the diff at Step 6.
 
 ![Blocked and redacted](./images/bsa-4-blocked.png?raw=true "Blocked and redacted")
 
 <br><br>
 
-11. **(Optional)** Prove the allowlist is carrying the defense: temporarily add `"OmniTech_Security_Bulletin_2024.pdf"` to the trusted-source list in `rag_hardened.py`, re-run, and ask about the password reset again. The poisoned chunk is now trusted at the door - watch the later layers try to catch it alone. Remove it when done.
-
-<br><br>
-
-> **Why the allowlist is the strongest layer here:** the attacker controls the *text* of a poisoned document, but not *where it came from*. Filtering on provenance beats filtering on content.
+10. **(Optional)** Prove the allowlist is carrying the defense: add `"OmniTech_Security_Bulletin_2024.pdf"` to `TRUSTED_SOURCES`, re-run, and ask the password question again. The poisoned chunk is now trusted at the door - watch the later layers try to catch it alone. Remove it when done.
 
 <br><br>
 
 **Key Takeaways:**
-- **Document poisoning is a precision attack** - a handful of documents in a corpus of millions is enough to steer answers.
-- **Treat retrieved content as untrusted input** - it can carry hidden instructions aimed at the model.
-- **Defense in depth wins** - source allowlists, injection detection, relevance filtering, and output scanning each catch what the others miss.
-- **Output scanning is the safety net** - it protects users even when a malicious chunk slips through input filtering.
+- **Treat retrieved content as untrusted input** - a handful of poisoned documents can steer answers, and their text can carry instructions aimed at the model.
+- **Provenance beats content** - the attacker controls a document's *text*, not *where it came from*; the source allowlist is the strongest layer.
+- **Output scanning is the safety net** - it protects users even when a malicious chunk slips through the input filters.
 
 <p align="center">
 <b>[END OF LAB]</b>

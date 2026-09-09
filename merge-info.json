@@ -81,8 +81,8 @@
     ],
     "extra/secure_agent_complete.txt": [
       {
-        "anchor": "return {\"read_ticket\", \"summarize\", \"send_email\"}",
-        "lines": 1,
+        "anchor": "def allowed_tools(task):",
+        "endAnchor": "return {\"read_ticket\", \"summarize\", \"send_email\"}",
         "title": "Control 1 - least privilege",
         "note": [
           "**Offer the model only the tools this task needs - export/delete are never on the menu.**",
@@ -90,7 +90,8 @@
         ]
       },
       {
-        "anchor": "if tool not in HIGH_RISK_TOOLS:",
+        "anchor": "def approve(tool, args):",
+        "endAnchor": "return False",
         "title": "Control 2 - approval gate",
         "note": [
           "**Low-risk tools run freely; high-risk tools pause for a decision.**",
@@ -99,8 +100,8 @@
         ]
       },
       {
-        "anchor": "return steps_taken < MAX_STEPS",
-        "lines": 1,
+        "anchor": "def within_budget(steps_taken, executed):",
+        "endAnchor": "return steps_taken < MAX_STEPS",
         "title": "Control 3 - budget cap",
         "note": "**Stop after MAX_STEPS actions.** Even if every other control failed, a hijacked agent can't loop or escalate past the cap."
       }
@@ -118,21 +119,21 @@
     ],
     "extra/rag_hardened_complete.txt": [
       {
-        "anchor": "# 1. Only chunks from these PDFs are trusted (an allowlist).",
-        "lines": 2,
+        "anchor": "TRUSTED_SOURCES = {",
+        "lines": 1,
         "title": "Policy 1 - source allowlist",
         "note": "**Only chunks from these two PDFs are trusted.** Everything else in the vector DB is [UNKNOWN] and dropped."
       },
       {
-        "anchor": "# 2. A chunk containing any of these is a poisoned document -> dropped.",
-        "endAnchor": "RELEVANCE_MIN = 0.10",
+        "anchor": "INJECTION_PATTERNS = [",
         "title": "Policies 2, 3, 4",
         "note": [
-          "**Injection phrases that mark a poisoned chunk, output phrases to redact, and a relevance floor.**",
+          "**Injection phrases that mark a poisoned chunk, a relevance floor, and output phrases to redact.**",
           "- INJECTION_PATTERNS: the poisoned bulletin's own words (override, supersedes...)",
-          "- BAD_OUTPUT_PATTERNS: the phishing domains and data-harvest asks it tries to plant",
-          "- RELEVANCE_MIN: cosine similarity below this = not really about the question"
-        ]
+          "- RELEVANCE_MIN: cosine similarity below this = not really about the question",
+          "- BAD_OUTPUT_PATTERNS: the phishing domains and data-harvest asks it tries to plant"
+        ],
+        "lines": 13
       },
       {
         "anchor": "kept = []",
