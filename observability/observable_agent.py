@@ -24,6 +24,7 @@ from opentelemetry.trace import Status, StatusCode
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "common"))
 import llm
+from labkit import blue, green, red, pause
 
 
 # ===========================================================================
@@ -120,14 +121,16 @@ def main():
             instrument_call(tracer, user, request)
 
     spans = [s for s in exporter.get_finished_spans() if "tool" in s.attributes]
-    print("\n=== TELEMETRY SUMMARY ===")
+    pause("the telemetry summary")
+    print("=== TELEMETRY SUMMARY ===")
     print(f"  tool spans      : {len(spans)}")
     print(f"  sensitive calls : {sum(bool(s.attributes.get('sensitive')) for s in spans)}")
     print(f"  denied calls    : {sum(s.attributes.get('status') == 'denied' for s in spans)}")
 
-    print("\n=== ANOMALY DETECTION ===")
+    pause("the anomaly detector's findings")
+    print("=== ANOMALY DETECTION ===")
     for f in detect_anomalies(spans):
-        print(f"  [!] {f}")
+        red(f"  [!] {f}")
     print()
 
 

@@ -1,7 +1,7 @@
 # Building Secure AI Agents: Defense-First Development
 ## Half-day workshop (3 hours)
 ## Session labs
-## Revision 1.11 - 09/09/26
+## Revision 1.13 - 09/09/26
 
 
 **Follow the startup instructions in the README.md file IF NOT ALREADY DONE!**
@@ -133,6 +133,10 @@ It pushes seven requests through the pipeline one at a time - each request in **
 
 <br><br>
 
+**Wrapping up:** At the `>` prompt, type `quit` (or press Enter on an empty line) to exit the demo and get your shell prompt back.
+
+<br><br>
+
 **Key Takeaways:**
 - **Guardrails wrap the model on both sides** - screen the request before the model, screen the reply before the user.
 - **Two outcomes** - repair what's repairable (redact PII), block what isn't.
@@ -201,7 +205,9 @@ code -d ../extra/secure_agent_complete.txt secure_agent.py
 python secure_agent.py
 ```
 
-✓ **Success looks like:** the **SECURED AGENT** section shows `export_data` **BLOCKED** (allowlist), `send_email` **BLOCKED** (approval denied), the remaining steps **HALTED** (budget), and ends `contained (no high-risk tool fired)` - while the **UNDEFENDED** section above still ends in `BREACH`. If the secured run also shows `BREACH`, a control didn't merge; reopen the diff at Step 4.
+The undefended run prints first and pauses; press **Enter** for the secured run.
+
+✓ **Success looks like:** the undefended run is a wall of green `OK` lines ending in a red **BREACH**. The **SECURED AGENT** run then shows `export_data` **BLOCKED** (allowlist), `send_email` **BLOCKED** (approval denied), the remaining steps **HALTED** (budget), and ends green: `contained (no high-risk tool fired)`. If the secured run also shows `BREACH`, a control didn't merge; reopen the diff at Step 4.
 
 ![Same hijack, contained](./images/bsa-2-contained.png?raw=true "Same hijack, contained")
 
@@ -212,6 +218,10 @@ python secure_agent.py
 <br><br>
 
 8. **(Optional)** In `approve()`, temporarily `return True` for everything and re-run - `send_email` now fires. Put the denial back.
+
+<br><br>
+
+**Wrapping up:** `secure_agent.py` runs to completion and exits on its own - there is nothing to stop. If you tried Step 8, put the denial back in `approve()` before moving on.
 
 <br><br>
 
@@ -300,7 +310,7 @@ cd /workspaces/secure-agents/mcp
 python client.py
 ```
 
-The client mints a scoped JWT for each registered client and calls all three tools against the server.
+The client mints a scoped JWT for each registered client and calls all three tools against the server, pausing between the three runs - press **Enter** to move on. Successful calls print green, denials red.
 
 <br><br>
 
@@ -332,7 +342,7 @@ You'll see `'scope': 'tools:add'` - the limited client's token never carries the
 
 <br><br>
 
-11. When you're done, stop the server with **Ctrl+C** in Terminal 1.
+**Wrapping up:** In **Terminal 1**, stop the FastMCP server with **Ctrl+C** - it holds port 8000 until you do. The client in Terminal 2 has already exited, so you can close that terminal.
 
 <br><br>
 
@@ -431,7 +441,7 @@ code -d ../extra/rag_hardened_complete.txt rag_hardened.py
 python rag_hardened.py
 ```
 
-Startup now labels each source `[TRUSTED]` or `[UNKNOWN]`.
+Startup now labels each source `[TRUSTED]` in green or `[UNKNOWN]` in red.
 
 ![Trusted vs unknown sources](./images/bsa-4-trusted.png?raw=true "Trusted vs unknown sources")
 
@@ -446,6 +456,10 @@ Startup now labels each source `[TRUSTED]` or `[UNKNOWN]`.
 <br><br>
 
 10. **(Optional)** Prove the allowlist is carrying the defense: add `"OmniTech_Security_Bulletin_2024.pdf"` to `TRUSTED_SOURCES`, re-run, and ask the password question again. The poisoned chunk is now trusted at the door - watch the later layers try to catch it alone. Remove it when done.
+
+<br><br>
+
+**Wrapping up:** Type `quit` at the `>` prompt to leave the hardened RAG (same for the vulnerable run in Step 5). If you tried Step 10, take the poisoned bulletin back out of `TRUSTED_SOURCES` before moving on.
 
 <br><br>
 
@@ -515,7 +529,9 @@ code -d ../extra/observable_agent_complete.txt observable_agent.py
 python observable_agent.py
 ```
 
-✓ **Success looks like:** a stream of `[AUDIT]` lines (one per request), each carrying a `trace=` and `span=` id, followed by a **TELEMETRY SUMMARY** and an **ANOMALY DETECTION** block that flags `mallory`'s denied exports, a **BURST**, and the users who touched sensitive tooling. If you see `NotImplementedError` or no anomaly findings, a function didn't merge - reopen the diff at Step 3.
+The run pauses between its three sections - press **Enter** to move on.
+
+✓ **Success looks like:** a stream of `[AUDIT]` lines (one per request), each carrying a `trace=` and `span=` id - green where the call was allowed, red where it was denied - followed by a **TELEMETRY SUMMARY** and an **ANOMALY DETECTION** block that flags `mallory`'s denied exports, a **BURST**, and the users who touched sensitive tooling. If you see `NotImplementedError` or no anomaly findings, a function didn't merge - reopen the diff at Step 3.
 
 ![Structured audit stream](./images/bsa-5-audit.png?raw=true "Structured audit stream")
 
@@ -538,6 +554,10 @@ python observable_agent.py
 <br><br>
 
 10. **(Optional)** Add `"update_salary"` to `TOOLS` and to the tool names in `TOOL_SYSTEM`, add a request like `("mallory", "Update employee E1002's salary to $200k.")`, and re-run. The new action flows through the **same** instrumentation with no new logging code: the `[AUDIT]` line shows `status=denied` and `detect_anomalies` surfaces it.
+
+<br><br>
+
+**Wrapping up:** `observable_agent.py` runs to completion and exits on its own - there is nothing to stop.
 
 <br><br>
 
@@ -565,8 +585,23 @@ single control carried the load - together they are defense in depth for an agen
 **The layer we did not build.** Everything here constrains what the agent *decides*.
 None of it constrains the *process* it runs in - sandboxing, filesystem scope, egress
 allowlists, keeping credentials out of context. That layer doesn't depend on the model
-behaving, which is why it holds when the others are wrong. We cover it on the slides;
-if you do one thing after today, sandbox your agent.
+behaving, which is why it holds when the others are wrong. If you do one thing after
+today, sandbox your agent.
+
+*See it in 60 seconds.* The labs' dangerous tools only **print** what they would do, so
+a sandbox would have nothing to stop. This demo does the real thing - it reads real
+employee data, reads a real credential, and opens a real network connection - and runs
+that same code twice:
+
+```
+bash /workspaces/secure-agents/containment/sandbox_demo.sh
+```
+
+Unconfined, all three **REACHED**. Sandboxed, all three **BLOCKED** - and not one line
+of the agent changed. The sandbox is three ordinary Linux features, no Docker and no
+root: a private network namespace (no egress), a private mount namespace with an empty
+filesystem over the data directory (filesystem scope), and an empty environment
+(credentials out of reach).
 
 **And keep an eye on state.** Anything an agent persists becomes an input to its next
 run, and the poisoning usually happens during summarization - so the run that plants it

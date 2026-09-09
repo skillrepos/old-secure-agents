@@ -13,6 +13,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "common"))
 import llm
+from labkit import blue, green, red, pause
 
 # Set by main(): the ticket the tools operate on.
 _TICKET = ""
@@ -103,21 +104,23 @@ def run_agent(plan, label, task, all_tools, high_risk, max_steps,
     print(f"--- {label} ---")
     for i, (tool, args) in enumerate(plan, 1):
         if controls_on and not within_budget(i - 1, executed):
-            print(f"[{i}] {tool:<14} HALTED  (budget: >{max_steps} actions)")
+            red(f"[{i}] {tool:<14} HALTED  (budget: >{max_steps} actions)")
             continue
         if controls_on and tool not in allow:
-            print(f"[{i}] {tool:<14} BLOCKED (not in least-privilege allowlist)")
+            red(f"[{i}] {tool:<14} BLOCKED (not in least-privilege allowlist)")
             continue
         if controls_on and not approve(tool, args):
-            print(f"[{i}] {tool:<14} BLOCKED (approval denied)")
+            red(f"[{i}] {tool:<14} BLOCKED (approval denied)")
             continue
         result = TOOL_FUNCS[tool](args)
         executed.append(tool)
         shown = " ".join(str(result).split())   # collapse newlines; show in full
-        print(f"[{i}] {tool:<14} OK   -> {shown}")
+        green(f"[{i}] {tool:<14} OK   -> {shown}")
     breached = sorted(set(executed) & high_risk)
-    verdict = f"BREACH: {breached}" if breached else "contained (no high-risk tool fired)"
-    print(f"    => {verdict}\n")
+    if breached:
+        red(f"    => BREACH: {breached}\n")
+    else:
+        green("    => contained (no high-risk tool fired)\n")
     return executed
 
 
@@ -128,9 +131,10 @@ def main(task, ticket, all_tools, high_risk, max_steps,
     _TICKET = ticket
     print(f"=== SECURING AGENTS (model {llm.active_backend('strong')}) ===\n")
     plan, model_plan = build_plan(task, ticket, all_tools)
-    print(f"The real model, reading the poisoned ticket, proposed: "
-          f"{[t for t, _ in model_plan] or '(no valid JSON this run)'}\n")
+    blue("The real model, reading the poisoned ticket, proposed: "
+         f"{[t for t, _ in model_plan] or '(no valid JSON this run)'}\n")
     run_agent(plan, "UNDEFENDED AGENT", task, all_tools, high_risk, max_steps)
+    pause("what the three controls change")
     # Don't show a "secured" pass until the three controls are actually built.
     # In the skeleton they're no-ops, so a secured pass would just be an identical
     # breach -- pointless and confusing. It appears once the controls are real.

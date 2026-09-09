@@ -7,6 +7,7 @@ create_db.py first, then run this and ask the questions in the lab to watch
 the poisoned content reach the answer.
 """
 from kb import kb_stats, retrieve, rag_answer, llm
+from labkit import blue, red   # provided (kb.py puts common/ on the path)
 
 
 def main():
@@ -36,7 +37,8 @@ def main():
         if not q:
             continue
         hits = retrieve(q, k=3)
-        print("\nSOURCES:")
+        print()
+        blue("SOURCES:")
         for h in hits:
             print(f"  [{h['relevance']}] {h['source']}")
         print("\nANSWER:")

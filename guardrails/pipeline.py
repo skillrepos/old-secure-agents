@@ -15,14 +15,7 @@ import textwrap
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "common"))
 import llm
 
-# ---- Output styling: blue = the request, green = delivered, red = blocked --
-BLUE, GREEN, RED, DIM, RESET = "\033[94m", "\033[92m", "\033[91m", "\033[2m", "\033[0m"
-if not sys.stdout.isatty():                 # plain text when piped to a file
-    BLUE = GREEN = RED = DIM = RESET = ""
-
-
-def say(color, text):
-    print(f"{color}{text}{RESET}")
+from labkit import BLUE, GREEN, RED, DIM, RESET, say, pause
 
 
 def show_reply(prefix, text, color, limit=600):

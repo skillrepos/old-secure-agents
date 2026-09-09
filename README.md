@@ -1,6 +1,6 @@
 # Building Secure AI Agents: Defense-First Development
 
-## Half-day workshop (3 hours) &mdash; Revision 1.11
+## Half-day workshop (3 hours) &mdash; Revision 1.13
 
 These instructions will guide you through configuring a GitHub Codespaces
 environment that you can use to run the workshop labs.
