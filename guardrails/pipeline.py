@@ -10,9 +10,41 @@ calls them. You don't need to read it to do the lab.
 """
 import os
 import sys
+import textwrap
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "common"))
 import llm
+
+# ---- Output styling: blue = the request, green = delivered, red = blocked --
+BLUE, GREEN, RED, DIM, RESET = "\033[94m", "\033[92m", "\033[91m", "\033[2m", "\033[0m"
+if not sys.stdout.isatty():                 # plain text when piped to a file
+    BLUE = GREEN = RED = DIM = RESET = ""
+
+
+def say(color, text):
+    print(f"{color}{text}{RESET}")
+
+
+def show_reply(prefix, text, color, limit=600):
+    """Print a model reply under `prefix`, wrapped and indented, never cut mid-word."""
+    clipped = text
+    if len(text) > limit:
+        cut = text[:limit].rsplit(" ", 1)[0]
+        clipped = f"{cut} ... (+{len(text) - len(cut)} more chars)"
+    lines = []
+    for raw in clipped.splitlines() or [""]:
+        lines.extend(textwrap.wrap(raw, width=92, initial_indent=" " * 8,
+                                   subsequent_indent=" " * 8) or [""])
+    say(color, prefix + "\n" + "\n".join(lines))
+
+
+def pause(what="the next request"):
+    """Wait for Enter so each request can be read before the next one."""
+    try:
+        input(f"{DIM}--- press Enter for {what} ---{RESET}")
+    except EOFError:
+        pass
+    print()
 
 
 def run_guards(guards, text):
@@ -27,9 +59,9 @@ def run_guards(guards, text):
             continue
         if fixed is not None:               # repairable -> fix and keep going
             text, verdict = fixed, "FIXED"
-            print(f"    ~ {g.__name__}: {reason}")
+            say(GREEN, f"    ~ {g.__name__}: {reason}")
         else:                               # hard block
-            print(f"    x {g.__name__}: {reason}")
+            say(RED, f"    x {g.__name__}: {reason}")
             return "BLOCK", text, g.__name__
     return verdict, text, None
 
@@ -45,22 +77,23 @@ def handle(user_input, input_guards, output_guards, system, replay_reply=None):
     replay_reply: if given, skip the model and screen this canned reply
     instead (used to demonstrate the canary on a known-leaked response).
     """
-    shown = user_input if len(user_input) <= 64 else user_input[:61] + "..."
-    print(f"USER: {shown}")
+    # Show the full request (only the 700-x stress test is shortened).
+    shown = user_input if len(user_input) <= 200 else f"{user_input[:40]}... ({len(user_input)} chars)"
+    say(BLUE, f"USER: {shown}")
 
     # [0] Safety classifier screens the input (skipped if no GROQ_API_KEY,
     #     and skipped for a replay so the canary demo is deterministic).
     mv, md = (None, None) if replay_reply is not None else \
         llm.moderate([{"role": "user", "content": user_input}])
     if mv == "unsafe":
-        print(f"    x safety classifier flagged input ({_category(md)})")
-        print("    => INPUT BLOCKED (safety classifier)\n")
+        say(RED, f"    x safety classifier flagged input ({_category(md)})")
+        say(RED, "    => INPUT BLOCKED (safety classifier)")
         return "BLOCKED"
 
     # [1] Your input guards.
     verdict_in, _, _ = run_guards(input_guards, user_input)
     if verdict_in == "BLOCK":
-        print("    => INPUT BLOCKED (never reached the model)\n")
+        say(RED, "    => INPUT BLOCKED (never reached the model)")
         return "BLOCKED"
 
     # The model (or a replayed reply).
@@ -75,20 +108,20 @@ def handle(user_input, input_guards, output_guards, system, replay_reply=None):
     verdict_out, safe, blocked_by = run_guards(output_guards, reply)
     if verdict_out == "BLOCK":
         if blocked_by == "guard_canary":
-            print("    => OUTPUT BLOCKED + ALERT: prompt leak detected, session flagged\n")
+            say(RED, "    => OUTPUT BLOCKED + ALERT: prompt leak detected, session flagged")
         else:
-            print("    => OUTPUT BLOCKED (unsafe response withheld)\n")
+            say(RED, "    => OUTPUT BLOCKED (unsafe response withheld)")
         return "BLOCKED"
 
     # [3] Safety classifier screens the reply.
     ov, od = llm.moderate([{"role": "user", "content": user_input},
                            {"role": "assistant", "content": safe}])
     if ov == "unsafe":
-        print(f"    x safety classifier flagged output ({_category(od)})")
-        print("    => OUTPUT BLOCKED (safety classifier)\n")
+        say(RED, f"    x safety classifier flagged output ({_category(od)})")
+        say(RED, "    => OUTPUT BLOCKED (safety classifier)")
         return "BLOCKED"
 
-    print(f"    => DELIVERED ({verdict_out}): {safe[:160]}\n")
+    show_reply(f"    => DELIVERED ({verdict_out}):", safe, GREEN)
     return "DELIVERED"
 
 
@@ -126,13 +159,15 @@ def main(input_guards, output_guards, system, canary):
     def run(text, replay=None):
         return handle(text, input_guards, output_guards, system, replay_reply=replay)
 
-    # Part 1 - the battery.
+    # Part 1 - the battery, one request at a time.
     for text in BATTERY:
         run(text)
+        pause()
 
     # Part 2 - the canary. A hardened model rarely leaks, so replay one that did.
     print("--- Canary check: replaying a reply from an undefended model that leaked ---")
     run(LEAK_REQUEST, replay=_leaked_reply(canary))
+    pause("your turn at the prompt")
 
     # Part 3 - your turn.
     print("--- Your turn. Type a request, a number 1-7 to replay one, or 'leak'. "
@@ -151,3 +186,4 @@ def main(input_guards, output_guards, system, canary):
             run(LEAK_REQUEST, replay=_leaked_reply(canary))
         else:
             run(text)
+        print()
