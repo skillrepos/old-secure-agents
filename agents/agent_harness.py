@@ -27,7 +27,7 @@ def tool_read_ticket(args):
 def tool_summarize(args):
     text = args.get("text") or _TICKET
     return llm.complete("Summarize this benefits update for staff in 2-3 "
-                        "sentences:\n\n" + text, prefer="fast", max_tokens=120)
+                        "sentences:\n\n" + text, prefer="fast", max_tokens=800)
 
 
 def tool_export_data(args):

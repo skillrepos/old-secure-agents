@@ -1,7 +1,7 @@
 # Building Secure AI Agents: Defense-First Development
 ## Half-day workshop (3 hours)
 ## Session labs
-## Revision 1.9 - 09/09/26
+## Revision 1.10 - 09/09/26
 
 
 **Follow the startup instructions in the README.md file IF NOT ALREADY DONE!**
@@ -225,9 +225,7 @@ python secure_agent.py
 
 **Purpose: Harden the Model Context Protocol (MCP) server HelpBot uses to reach its tools. A token authority issues scoped JWTs, and a real FastMCP server enforces per-tool scope checks in middleware - so one server grants different clients different subsets of tools.**
 
-**This lab uses two terminals: the MCP server and the client.**
-
-> **New terms in this lab:** **MCP (Model Context Protocol)** is a standard way for an agent to call external tools over a connection. A **JWT** is a signed token whose contents (here, a list of allowed tool **scopes**) can't be tampered with. **Middleware** is code that runs on *every* request before it reaches a tool - the right place to put an authorization check so nothing is protected by accident.
+**This lab uses two terminals: the MCP server and the client. The terms used here are defined on the *Lab 3 vocabulary* slide.**
 
 <br>
 
@@ -245,7 +243,7 @@ cd /workspaces/secure-agents/mcp
 code auth.py
 ```
 
-`auth.py` mints and verifies scoped JWTs with real **PyJWT**. Note the **client registry**: `full-client` gets all three scopes; `limited-client` gets only `tools:add`. Those scopes are signed into the token, so a client can't tamper with them. (This stands in for a real identity provider.)
+`auth.py` mints and verifies scoped JWTs with real **PyJWT**. Note the **client registry**: `full-client` gets all three scopes; `limited-client` gets only `tools:add`. The scopes are signed into the token, so a client can't tamper with them.
 
 ![Token authority](./images/bsa-3-auth.png?raw=true "Token authority")
 
@@ -257,7 +255,7 @@ code auth.py
 code secure_server.py
 ```
 
-A real **FastMCP** server exposing `add`, `multiply` and `divide` over HTTP. The security lives in `ScopeMiddleware.on_call_tool`, which runs on **every** call: read the `Authorization` header, verify the JWT, then call `enforce_scope()` - the one function you complete.
+A real **FastMCP** server exposing `add`, `multiply` and `divide` over HTTP. `ScopeMiddleware.on_call_tool` runs on **every** call: read the `Authorization` header, verify the JWT, then call `enforce_scope()` - the one function you complete.
 
 ![Secure server](./images/bsa-3-server.png?raw=true "Secure server")
 
@@ -269,7 +267,7 @@ A real **FastMCP** server exposing `add`, `multiply` and `divide` over HTTP. The
 code -d ../extra/secure_server_complete.txt secure_server.py
 ```
 
-Authentication is already provided (missing or bad token -> **401**). You merge in **`enforce_scope(claims, tool_name)`**: raise a **403** `ToolError` unless the token's scopes include `tools:<tool_name>`. Being in middleware, it protects every tool by default.
+Authentication is provided (missing or bad token -> **401**). You merge in **`enforce_scope(claims, tool_name)`**: raise a **403** `ToolError` unless the token's scopes include `tools:<tool_name>`.
 
 ![Building the secure MCP server](./images/bsa-3-build.png?raw=true "Building the secure MCP server")
 
@@ -314,13 +312,9 @@ The client mints a scoped JWT for each registered client and calls all three too
 
    ✓ **Success looks like:** three **401**s in the no-auth run, three **OK**s for `full-client`, then for `limited-client` one **OK** and two **DENIED (403)**. If `limited-client` succeeds on all three, `enforce_scope` didn't merge - reopen the diff at Step 4.
 
-Same server, different access levels, driven entirely by signed token scopes. Check the **server** terminal too: it logs each allowed call (`[SECURE] full-client -> multiply (allowed)`).
+Same server, different access levels, driven entirely by signed token scopes. The **server** terminal logs each allowed call (`[SECURE] full-client -> multiply (allowed)`).
 
 ![Scope enforcement in action](./images/bsa-3-scopes.png?raw=true "Scope enforcement in action")
-
-<br><br>
-
-> **Beyond this lab.** The shape is right - authenticate every call, authorize per tool, both in middleware - but the details are simplified. Per MCP spec revision **2026-07-28**, a protected server is an **OAuth 2.1 resource server**, must publish protected-resource metadata (**RFC 9728**), and must reject tokens not audience-bound to it (**RFC 8707**) - the *confused deputy* rule. The spec sets no scope-naming scheme: `tools:<name>` is this workshop's convention. The slides cover the rest.
 
 <br><br>
 
@@ -330,7 +324,7 @@ Same server, different access levels, driven entirely by signed token scopes. Ch
 python -c "import auth; print(auth.verify_token(auth.mint_token('limited-client')))"
 ```
 
-You'll see `'scope': 'tools:add'` - the limited client's token never carries the multiply/divide scopes, so the server can't be tricked into running them.
+You'll see `'scope': 'tools:add'` - the limited client's token never carries the multiply/divide scopes.
 
 <br><br>
 
@@ -339,10 +333,9 @@ You'll see `'scope': 'tools:add'` - the limited client's token never carries the
 <br><br>
 
 **Key Takeaways:**
-- **Authenticate every MCP call** - an unauthenticated tool call should never reach your tools.
-- **Scope tokens per tool** - least privilege means a client gets exactly the tools it needs and nothing more.
-- **Enforce in middleware** - centralizing the scope check keeps every tool protected by default.
-- **Bind tokens to an audience** - a token issued for another service must be rejected, and never passed upstream.
+- **Authenticate every MCP call** - an unauthenticated tool call never reaches a tool.
+- **Scope tokens per tool** - a client gets exactly the tools it needs and nothing more.
+- **Enforce in middleware** - one central check keeps every tool protected by default, including the ones you add later.
 
 <p align="center">
 <b>[END OF LAB]</b>
@@ -468,7 +461,7 @@ Startup now labels each source `[TRUSTED]` or `[UNKNOWN]`.
 
 > **This lab is designed to work as post-class homework if we run short on time.** It's self-contained and needs only the observability directory.
 
-> **New terms:** **observability** is being able to see what your system actually did. **OpenTelemetry (OTel)** is the standard library for recording it. A **span** is one timed record of one operation - a log line with a stopwatch and a label. A **trace** ties one session's spans together by a shared **trace ID**. Real systems ship these to Jaeger or a SIEM; here they stay in memory so you can inspect them immediately.
+> The terms used here are defined on the *Lab 5 vocabulary* slide.
 
 <br>
 
@@ -486,7 +479,7 @@ cd /workspaces/secure-agents/observability
 code observable_agent.py
 ```
 
-Note the `REQUESTS` list of `(user, request)` pairs and the `SENSITIVE_TOOLS` set. A real model drives `choose_tool()`, which picks one tool per request and returns JSON. The provided `build_tracer()` sets up a real OTel tracer with an in-memory exporter. Some requests are benign; `mallory` issues a burst of bulk exports and `bob` asks for a mass email - your instrumentation has to make that visible.
+Note the `REQUESTS` list of `(user, request)` pairs and the `SENSITIVE_TOOLS` set. A real model drives `choose_tool()`, picking one tool per request. Some requests are benign; `mallory` issues a burst of bulk exports and `bob` asks for a mass email - your instrumentation has to make that visible.
 
 ![Observable agent skeleton](./images/bsa-5-skeleton.png?raw=true "Observable agent skeleton")
 
@@ -502,11 +495,9 @@ code -d ../extra/observable_agent_complete.txt observable_agent.py
 
 <br><br>
 
-4. Two pieces to complete:
-   - **`instrument_call`** - opens a span around the tool choice, sets attributes (`user`, `tool`, `args`, `sensitive`, `status`), marks unauthorized calls ERROR, and prints an `[AUDIT]` line with the real `trace_id` / `span_id`.
-   - **`detect_anomalies`** - reads the captured spans and flags denied calls, sensitive-tool bursts (3+ of the same call), and any user touching sensitive tooling.
-
-   The `authorize` stub (only `alice` may call sensitive tools) and the OTel setup are provided.
+4. Two pieces to complete - hover either block for a note:
+   - **`instrument_call`** - wraps one agent turn in a span with attributes (`user`, `tool`, `args`, `sensitive`, `status`) and prints an `[AUDIT]` line with the real `trace_id` / `span_id`.
+   - **`detect_anomalies`** - reads the captured spans and flags denied calls, sensitive-tool bursts, and any user touching sensitive tooling.
 
 <br><br>
 
@@ -526,7 +517,7 @@ python observable_agent.py
 
 <br><br>
 
-7. Read the **`[AUDIT]`** stream. Every call is a real span sharing one **trace_id** for the session, each with its own **span_id** - the same model you'd export to Jaeger, Tempo or a SIEM.
+7. Read the **`[AUDIT]`** stream. Every call is a real span sharing one **trace_id** for the session, each with its own **span_id**.
 
 <br><br>
 
@@ -536,25 +527,20 @@ python observable_agent.py
 
 <br><br>
 
-9. Now **ANOMALY DETECTION**. The detector flags `mallory`'s denied exports, the **BURST** of three rapid export calls, and every user who touched sensitive tooling. That is the jump from *logging events* to *finding patterns* - the difference between "we have logs" and "we noticed the attack."
+9. Now **ANOMALY DETECTION**. The detector flags `mallory`'s denied exports, the **BURST** of three rapid export calls, and every user who touched sensitive tooling - the jump from *logging events* to *finding patterns*.
 
 ![Anomaly detection](./images/bsa-5-anomaly.png?raw=true "Anomaly detection")
 
 <br><br>
 
-10. **(Optional)** Add `"update_salary"` to `TOOLS` and to the tool names in `TOOL_SYSTEM`, then add a request like `("mallory", "Update employee E1002's salary to $200k.")` and re-run. The new action flows through the **same** instrumentation with no new logging code - a span is emitted, the `[AUDIT]` line shows `status=denied`, and `detect_anomalies` surfaces it automatically.
-
-<br><br>
-
-> **Note:** this is the one lab that adds no precondition. Labs 1-4 are **preventive** - they decide whether an action runs. Observability is the **detective** layer underneath: it finds the attacks your preventive controls got wrong. A system with only preventive controls fails silently.
+10. **(Optional)** Add `"update_salary"` to `TOOLS` and to the tool names in `TOOL_SYSTEM`, add a request like `("mallory", "Update employee E1002's salary to $200k.")`, and re-run. The new action flows through the **same** instrumentation with no new logging code: the `[AUDIT]` line shows `status=denied` and `detect_anomalies` surfaces it.
 
 <br><br>
 
 **Key Takeaways:**
-- **Instrument every tool call** - structured logs with trace and span IDs make agent behavior auditable and explainable.
-- **Telemetry feeds both ops and security** - the same spans power latency dashboards and intrusion detection.
-- **Detect patterns, not just events** - bursts and denied-call clusters reveal abuse that any single line wouldn't.
-- **Audit trails enable incident response** - forensics depends on having recorded what happened.
+- **Instrument every tool call** - spans with trace and span IDs make agent behavior auditable.
+- **Detect patterns, not just events** - bursts and denied-call clusters reveal abuse no single line would.
+- **This is the detective layer** - Labs 1-4 decide whether an action runs; this lab finds the ones they got wrong. Preventive-only systems fail silently.
 
 <p align="center">
 <b>[END OF LAB]</b>
