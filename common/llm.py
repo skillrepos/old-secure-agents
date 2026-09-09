@@ -24,6 +24,11 @@ Groq production models (openai/gpt-oss-20b / -120b) and Groq's recommended
 policy-following safety model (openai/gpt-oss-safeguard-20b). Override any of
 them with the GROQ_MODEL_FAST / GROQ_MODEL_STRONG / GROQ_GUARD_MODEL env vars.
 
+Reasoning-model safety (Groq path): gpt-oss models think before they answer,
+and the thinking consumes max_tokens. llm.py enforces a floor (GROQ_MIN_TOKENS,
+default 600) and retries once with a doubled budget if a reply comes back empty,
+so no lab can silently get a blank answer because of a small per-call budget.
+
 Dependency-free: uses only the Python standard library.
 """
 import json
@@ -74,8 +79,15 @@ def _ollama(messages, temperature, max_tokens):
     return (resp["message"].get("content") or "").strip()
 
 
-def _groq(messages, prefer, temperature, max_tokens):
-    model = GROQ_MODEL_STRONG if prefer == "strong" else GROQ_MODEL_FAST
+# gpt-oss are REASONING models: they spend completion tokens on a hidden
+# "reasoning" pass before writing any "content". If max_tokens runs out during
+# reasoning, the API still returns 200 -- with empty content. Two protections:
+#   1. GROQ_MIN_TOKENS: never send a smaller budget than this, whatever a caller asks for.
+#   2. If content still comes back empty, retry once with double the budget.
+GROQ_MIN_TOKENS = int(os.environ.get("GROQ_MIN_TOKENS", "600"))
+
+
+def _groq_once(model, messages, temperature, max_tokens):
     payload = {"model": model, "messages": messages,
                "temperature": temperature, "max_tokens": max_tokens}
     try:
@@ -90,10 +102,16 @@ def _groq(messages, prefer, temperature, max_tokens):
             body = ""
         raise RuntimeError(f"Groq request failed ({e.code}) for model {model}. "
                            f"Response: {body or '(no body)'}")
-    # gpt-oss are reasoning models: they spend completion tokens on a
-    # "reasoning" field before emitting "content". If max_tokens is used up by
-    # reasoning, content comes back empty or null -- never assume a string.
     return (resp["choices"][0]["message"].get("content") or "").strip()
+
+
+def _groq(messages, prefer, temperature, max_tokens):
+    model = GROQ_MODEL_STRONG if prefer == "strong" else GROQ_MODEL_FAST
+    budget = max(max_tokens, GROQ_MIN_TOKENS)
+    text = _groq_once(model, messages, temperature, budget)
+    if not text:                       # reasoning ate the whole budget -- try once more, bigger
+        text = _groq_once(model, messages, temperature, budget * 2)
+    return text
 
 
 def guard_available():
